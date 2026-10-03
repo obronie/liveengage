@@ -53,6 +53,7 @@ export interface Session {
   room_code: string;
   entry_mode: SessionEntryMode;
   status: SessionStatus;
+  pacing_mode?: 'waiting_screen' | 'start_now';
   current_question_index: number;
   facilitator_instructions?: string;
   question_timer_end?: string | null; // ISO timestamp

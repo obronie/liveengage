@@ -40,6 +40,7 @@ function ParticipantPlayContent() {
   const [wordSubmission, setWordSubmission] = useState<string>('');
   const [justSubmittedFeedback, setJustSubmittedFeedback] = useState<boolean>(false);
   const [currentResponse, setCurrentResponse] = useState<ResponseRecord | null>(null);
+  const [localQuestionIndex, setLocalQuestionIndex] = useState<number>(0);
 
   // Timer
   const [timeLeft, setTimeLeft] = useState<number>(60);
@@ -107,7 +108,9 @@ function ParticipantPlayContent() {
     );
     setParticipant(p);
 
-    if (session.status === 'lobby') {
+    if (session.pacing_mode === 'start_now') {
+      setStage('active');
+    } else if (session.status === 'lobby') {
       setStage('waiting');
     } else if (session.status === 'completed') {
       setStage('completed');
@@ -127,18 +130,20 @@ function ParticipantPlayContent() {
         const updatedSession = event.payload as Session;
         setSession(updatedSession);
 
-        if (updatedSession.status === 'lobby') {
-          setStage('waiting');
-        } else if (updatedSession.status === 'completed') {
-          setStage('completed');
-          // Automatically clear group identity cache so shared classroom tablet is clean for next cohort!
-          if (updatedSession.entry_mode === 'group') {
-            setDisplayName('');
+        if (updatedSession.pacing_mode !== 'start_now') {
+          if (updatedSession.status === 'lobby') {
+            setStage('waiting');
+          } else if (updatedSession.status === 'completed') {
+            setStage('completed');
+            // Automatically clear group identity cache so shared classroom tablet is clean for next cohort!
+            if (updatedSession.entry_mode === 'group') {
+              setDisplayName('');
+            }
+          } else if (updatedSession.status === 'revealed') {
+            setStage('revealed');
+          } else if (updatedSession.status === 'question_active') {
+            setStage('active');
           }
-        } else if (updatedSession.status === 'revealed') {
-          setStage('revealed');
-        } else if (updatedSession.status === 'question_active') {
-          setStage('active');
         }
       }
     });
@@ -146,11 +151,14 @@ function ParticipantPlayContent() {
     return () => unsubscribe();
   }, [session?.room_code]);
 
+  const isSelfPaced = session?.pacing_mode === 'start_now';
+  const activeQIndex = isSelfPaced ? localQuestionIndex : (session?.current_question_index || 0);
+  const currentQ = session?.questions?.[activeQIndex];
+
   // Handle choice selection (Blind Review - can change choices freely while timer runs!)
   const handleToggleOption = (optIndex: number) => {
-    if (!session || session.status === 'question_locked' || session.status === 'revealed') return;
-
-    const currentQ = session.questions?.[session.current_question_index];
+    if (!session) return;
+    if (!isSelfPaced && (session.status === 'question_locked' || session.status === 'revealed')) return;
     if (!currentQ) return;
 
     let updated: number[] = [];
@@ -175,9 +183,7 @@ function ParticipantPlayContent() {
   };
 
   const submitChoiceToStore = async (val: number[] | string) => {
-    if (!session || !participant) return;
-    const currentQ = session.questions?.[session.current_question_index];
-    if (!currentQ) return;
+    if (!session || !participant || !currentQ) return;
 
     // Show playful confirmation immediately
     setJustSubmittedFeedback(true);
@@ -192,18 +198,32 @@ function ParticipantPlayContent() {
     setCurrentResponse(resp);
   };
 
+  const handleSelfPacedNextQuestion = () => {
+    if (!session || !session.questions) return;
+    const nextIdx = localQuestionIndex + 1;
+    if (nextIdx < session.questions.length) {
+      setLocalQuestionIndex(nextIdx);
+      setSelectedChoices([]);
+      setWordSubmission('');
+      setJustSubmittedFeedback(false);
+      setCurrentResponse(null);
+    } else {
+      setStage('completed');
+    }
+  };
+
   // Reset selections when question changes
   useEffect(() => {
     if (session && session.questions) {
-      const currentQ = session.questions[session.current_question_index];
-      if (currentQ) {
+      const q = session.questions[activeQIndex];
+      if (q) {
         setSelectedChoices([]);
         setWordSubmission('');
         setJustSubmittedFeedback(false);
 
         // Load existing response if any
         if (participant) {
-          const existing = AppStore.getResponses(session.id, currentQ.id).find(
+          const existing = AppStore.getResponses(session.id, q.id).find(
             r => r.participant_id === participant.id
           );
           if (existing) {
@@ -217,9 +237,7 @@ function ParticipantPlayContent() {
         }
       }
     }
-  }, [session?.current_question_index, session?.id, participant?.id]);
-
-  const currentQ = session?.questions?.[session.current_question_index];
+  }, [activeQIndex, session?.id, participant?.id]);
 
   return (
     <div className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col font-sans select-none">
@@ -319,22 +337,41 @@ function ParticipantPlayContent() {
 
             <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
               {session.entry_mode === 'group' ? (
-                /* Group Mode: Mandatory Team Name Prompt */
+                /* Group Mode: Only numbers 1-10 */
                 <div>
                   <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase tracking-wider mb-1">
                     <Users className="w-4 h-4" />
-                    <span>Group Table Identity</span>
+                    <span>Group (Only numbers 1-10)</span>
                   </div>
                   <p className="text-xs text-slate-400 mb-3">
-                    Enter your Table or Team name (e.g. Table 1, Table 2, Safety Crew).
+                    Tap your Group / Table number (1–10):
                   </p>
+                  <div className="grid grid-cols-5 gap-2 mb-3">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                      const isSelected = displayName === `Group ${num}` || displayName === `Table ${num}` || displayName === `${num}`;
+                      return (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => setDisplayName(`Group ${num}`)}
+                          className={`py-2.5 rounded-xl font-bold text-sm border transition-all ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white border-indigo-400 shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400'
+                              : 'bg-slate-950 text-slate-300 border-slate-700 hover:border-slate-500 hover:text-white'
+                          }`}
+                        >
+                          {num}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <input
                     type="text"
                     required
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="e.g. Table 1"
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-semibold min-h-[48px]"
+                    placeholder="e.g. Group 1"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-semibold"
                   />
                   <p className="text-[10px] text-amber-400/90 mt-2 flex items-center gap-1">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0" />
@@ -428,7 +465,7 @@ function ParticipantPlayContent() {
             {/* Question Stem */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
-                <span>Question {session.current_question_index + 1} of {session.questions?.length}</span>
+                <span>Question {activeQIndex + 1} of {session.questions?.length}</span>
                 <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-semibold">
                   {currentQ.format}
                 </span>
@@ -490,15 +527,41 @@ function ParticipantPlayContent() {
               )}
             </div>
 
-            {/* Playful Confirmation Message upon choice */}
+            {/* Playful Confirmation Message & Next Question in Self-Paced Mode */}
             {justSubmittedFeedback && (
-              <div className="p-3.5 rounded-xl bg-indigo-950/60 border border-indigo-500/30 text-center animate-in fade-in slide-in-from-bottom-2">
-                <p className="text-xs font-semibold text-emerald-300">
-                  Submitted, was the learner guide used in this answer? I wonder :-)
-                </p>
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  You can change your selection freely before the facilitator locks.
-                </p>
+              <div className="space-y-3">
+                <div className="p-3.5 rounded-xl bg-indigo-950/60 border border-indigo-500/30 text-center animate-in fade-in slide-in-from-bottom-2">
+                  <p className="text-xs font-semibold text-emerald-300">
+                    Submitted, was the learner guide used in this answer? I wonder :-)
+                  </p>
+                  {isSelfPaced && currentQ.additional_text && (
+                    <div className="mt-2.5 text-left p-3 rounded-lg bg-slate-900/90 border border-slate-800 text-xs text-slate-300">
+                      <span className="font-bold text-indigo-400 flex items-center gap-1 text-[11px] mb-1">
+                        <BookOpen className="w-3.5 h-3.5 text-emerald-400" /> Learner Guide Rationale:
+                      </span>
+                      <p className="leading-relaxed">{currentQ.additional_text}</p>
+                    </div>
+                  )}
+                  {!isSelfPaced && (
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      You can change your selection freely before the facilitator locks.
+                    </p>
+                  )}
+                </div>
+
+                {isSelfPaced && (
+                  <button
+                    type="button"
+                    onClick={handleSelfPacedNextQuestion}
+                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all min-h-[48px]"
+                  >
+                    <span>
+                      {activeQIndex + 1 < (session.questions?.length || 0)
+                        ? `Next Question (${activeQIndex + 2}/${session.questions?.length}) →`
+                        : 'Finish Quiz & View Results 🎉'}
+                    </span>
+                  </button>
+                )}
               </div>
             )}
           </div>

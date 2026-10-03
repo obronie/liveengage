@@ -34,12 +34,10 @@ function SessionBuilderContent() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
   const [clientName, setClientName] = useState('Spur Corporation');
-  const [groupName, setGroupName] = useState('Cohort B - Morning Group');
+  const [groupName, setGroupName] = useState('Group 1');
   const [sessionTitle, setSessionTitle] = useState('Cluster 2.4 - Warehouse Housekeeping & Safety');
   const [entryMode, setEntryMode] = useState<SessionEntryMode>('group');
-  const [facilitatorInstructions, setFacilitatorInstructions] = useState(
-    'Welcome team! Grab your Learner Guide Module 2. Table teams discuss before locking answers.'
-  );
+  const [pacingMode, setPacingMode] = useState<'waiting_screen' | 'start_now'>('waiting_screen');
 
   // AI Generator state
   const [aiPrompt, setAiPrompt] = useState('Generate 4 practical scenario questions on warehouse housekeeping, chemical spills, and PPE requirements');
@@ -207,9 +205,12 @@ function SessionBuilderContent() {
       title: sessionTitle || 'Live Classroom Poll',
       room_code: roomCode,
       entry_mode: entryMode,
-      status: 'lobby',
+      status: pacingMode === 'start_now' ? 'question_active' : 'lobby',
+      pacing_mode: pacingMode,
       current_question_index: 0,
-      facilitator_instructions: facilitatorInstructions,
+      facilitator_instructions: pacingMode === 'start_now'
+        ? 'Self-paced session: Answer each question at your own pace.'
+        : 'Waiting for facilitator to start...',
       created_at: new Date().toISOString(),
       group: {
         id: 'grp-' + Math.random().toString(36).substring(2, 9),
@@ -269,7 +270,7 @@ function SessionBuilderContent() {
             <div>
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                 <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Course Ingestion Source</span>
+                <span>Course</span>
               </label>
               <select
                 value={selectedCourseId}
@@ -304,19 +305,23 @@ function SessionBuilderContent() {
               />
             </div>
 
-            {/* Cohort / Group Name */}
+            {/* Group (Only numbers 1-10) */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Cohort / Session Group</span>
+                <span>Group (Only numbers 1-10)</span>
               </label>
-              <input
-                type="text"
+              <select
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
-                placeholder="e.g. Cohort B - Morning"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500"
-              />
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-medium text-white focus:outline-none focus:border-indigo-500 font-mono"
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                  <option key={num} value={`Group ${num}`}>
+                    Group {num}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Entry Mode Toggle */}
@@ -367,15 +372,39 @@ function SessionBuilderContent() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                Facilitator Waiting Room Instructions (Shown on participant screens)
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Waiting Screen or Start Now</span>
               </label>
-              <input
-                type="text"
-                value={facilitatorInstructions}
-                onChange={(e) => setFacilitatorInstructions(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500"
-              />
+              <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setPacingMode('waiting_screen')}
+                  className={`py-2 px-3 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                    pacingMode === 'waiting_screen'
+                      ? 'bg-indigo-600 text-white shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span>Waiting Screen</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPacingMode('start_now')}
+                  className={`py-2 px-3 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                    pacingMode === 'start_now'
+                      ? 'bg-indigo-600 text-white shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span>Start Now (Own Pace)</span>
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1">
+                {pacingMode === 'waiting_screen'
+                  ? 'Learners hold on waiting screen until facilitator starts.'
+                  : 'Learner can start at own pace immediately upon joining.'}
+              </p>
             </div>
           </div>
         </div>
