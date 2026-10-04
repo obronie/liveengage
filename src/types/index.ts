@@ -90,6 +90,9 @@ export interface Question {
   duration: number; // 0 for untimed / manual lock
   marks?: number; // Mark allocation: 1 for recall, 2-3 for calculations / workplace scenarios
   guide_topic_hint?: string;
+  _timing_mode?: 'per_question' | 'overall' | 'untimed';
+  _overall_time_minutes?: number;
+  _per_question_duration?: number;
 }
 
 export interface Session {

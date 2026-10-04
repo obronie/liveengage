@@ -2153,6 +2153,20 @@ export class AppStore {
             s.total_marks = sum;
             sMutated = true;
           }
+          // Normalize timing fields if missing or undefined
+          const q0 = (s.questions && s.questions[0]) ? (s.questions[0] as any) : null;
+          if (!s.timing_mode) {
+            s.timing_mode = q0?._timing_mode || (s.time_allowed_minutes && s.time_allowed_minutes > 0 && !s.questions.some(q => q.duration > 0) ? 'overall' : 'per_question');
+            sMutated = true;
+          }
+          if (s.overall_time_minutes === undefined) {
+            s.overall_time_minutes = q0?._overall_time_minutes || s.time_allowed_minutes || 20;
+            sMutated = true;
+          }
+          if (s.per_question_duration === undefined) {
+            s.per_question_duration = q0?._per_question_duration || (s.questions?.[0]?.duration > 0 ? s.questions[0].duration : 45);
+            sMutated = true;
+          }
           if (sMutated) changed = true;
         });
         if (changed) {
@@ -2198,8 +2212,40 @@ export class AppStore {
           const local = this.getQuestionSets();
           data.forEach(remoteSet => {
             const idx = local.findIndex(l => l.id === remoteSet.id);
-            if (idx >= 0) local[idx] = remoteSet;
-            else local.push(remoteSet);
+            const existing = idx >= 0 ? local[idx] : undefined;
+            const q0 = (remoteSet.questions && remoteSet.questions[0]) ? (remoteSet.questions[0] as any) : null;
+
+            // Preserve local timing values first and foremost, fallback to remote JSONB or columns
+            const timing_mode = existing?.timing_mode
+              || remoteSet.timing_mode
+              || q0?._timing_mode
+              || (remoteSet.time_allowed_minutes && remoteSet.time_allowed_minutes > 0 && (!remoteSet.questions || !remoteSet.questions.some((q: any) => q.duration > 0)) ? 'overall' : 'per_question');
+
+            const overall_time_minutes = existing?.overall_time_minutes
+              || remoteSet.overall_time_minutes
+              || q0?._overall_time_minutes
+              || remoteSet.time_allowed_minutes
+              || 20;
+
+            const per_question_duration = existing?.per_question_duration
+              || remoteSet.per_question_duration
+              || q0?._per_question_duration
+              || (remoteSet.questions?.[0]?.duration > 0 ? remoteSet.questions[0].duration : 45);
+
+            const mergedSet: QuestionSet = {
+              ...(existing || {}),
+              ...remoteSet,
+              timing_mode,
+              overall_time_minutes,
+              per_question_duration,
+              time_allowed_minutes: timing_mode === 'overall' ? overall_time_minutes : (remoteSet.time_allowed_minutes || existing?.time_allowed_minutes || 20),
+            };
+
+            if (idx >= 0) {
+              local[idx] = mergedSet;
+            } else {
+              local.push(mergedSet);
+            }
           });
           if (typeof window !== 'undefined') {
             localStorage.setItem(QUESTION_SETS_STORAGE_KEY, JSON.stringify(local));
@@ -2216,10 +2262,21 @@ export class AppStore {
   static async saveQuestionSet(set: QuestionSet): Promise<QuestionSet> {
     const all = this.getQuestionSets();
     const index = all.findIndex(s => s.id === set.id);
+    const sanitizedSet: QuestionSet = {
+      ...set,
+      timing_mode: set.timing_mode || 'per_question',
+      overall_time_minutes: set.timing_mode === 'overall' ? (set.overall_time_minutes || 20) : set.overall_time_minutes,
+      per_question_duration: set.timing_mode === 'per_question' ? (set.per_question_duration || 45) : set.per_question_duration,
+      time_allowed_minutes: set.timing_mode === 'overall' 
+        ? (set.overall_time_minutes || 20) 
+        : (set.timing_mode === 'untimed' ? 0 : (set.time_allowed_minutes || 20)),
+      updated_at: new Date().toISOString(),
+    };
+
     if (index >= 0) {
-      all[index] = { ...set, updated_at: new Date().toISOString() };
+      all[index] = sanitizedSet;
     } else {
-      all.unshift(set);
+      all.unshift(sanitizedSet);
     }
     if (typeof window !== 'undefined') {
       localStorage.setItem(QUESTION_SETS_STORAGE_KEY, JSON.stringify(all));
@@ -2227,30 +2284,41 @@ export class AppStore {
     const supabase = getSupabaseClient();
     if (supabase) {
       try {
+        // Tag questions in JSONB with timing config so Supabase retains it without needing DB schema alterations
+        const questionsWithMeta = (sanitizedSet.questions || []).map((q, idx) => ({
+          ...q,
+          duration: sanitizedSet.timing_mode === 'per_question' ? (sanitizedSet.per_question_duration || q.duration || 45) : 0,
+          ...(idx === 0 ? {
+            _timing_mode: sanitizedSet.timing_mode,
+            _overall_time_minutes: sanitizedSet.overall_time_minutes,
+            _per_question_duration: sanitizedSet.per_question_duration,
+          } : {}),
+        }));
+
         await supabase.from('question_sets').upsert({
-          id: set.id,
-          cluster_id: set.cluster_id,
-          set_number: set.set_number || 1,
-          title: set.title,
-          is_custom: set.is_custom || false,
-          is_fsa_mock: set.is_fsa_mock || false,
-          client_name: set.client_name || 'Generic Standard',
-          eisa_focus_area: set.eisa_focus_area || null,
-          raw_notebook_extract: set.raw_notebook_extract || null,
-          custom_background_context: set.custom_background_context || null,
-          target_level: set.target_level || 'operational',
-          default_entry_mode: set.default_entry_mode || 'group',
-          total_marks: set.total_marks || 10,
-          time_allowed_minutes: set.time_allowed_minutes || 20,
-          questions: set.questions || [],
-          created_at: set.created_at,
-          updated_at: set.updated_at || new Date().toISOString(),
+          id: sanitizedSet.id,
+          cluster_id: sanitizedSet.cluster_id,
+          set_number: sanitizedSet.set_number || 1,
+          title: sanitizedSet.title,
+          is_custom: sanitizedSet.is_custom || false,
+          is_fsa_mock: sanitizedSet.is_fsa_mock || false,
+          client_name: sanitizedSet.client_name || 'Generic Standard',
+          eisa_focus_area: sanitizedSet.eisa_focus_area || null,
+          raw_notebook_extract: sanitizedSet.raw_notebook_extract || null,
+          custom_background_context: sanitizedSet.custom_background_context || null,
+          target_level: sanitizedSet.target_level || 'operational',
+          default_entry_mode: sanitizedSet.default_entry_mode || 'group',
+          total_marks: sanitizedSet.total_marks || 10,
+          time_allowed_minutes: sanitizedSet.time_allowed_minutes || 20,
+          questions: questionsWithMeta,
+          created_at: sanitizedSet.created_at,
+          updated_at: sanitizedSet.updated_at,
         });
       } catch (e) {
         console.warn('Supabase saveQuestionSet failed:', e);
       }
     }
-    return set;
+    return sanitizedSet;
   }
 
   static async deleteQuestionSet(questionSetId: string): Promise<void> {
@@ -2355,6 +2423,9 @@ export class AppStore {
 
   static async getSessionByRoomCode(roomCode: string): Promise<Session | null> {
     const normalized = roomCode.trim().toUpperCase();
+    const localSessions = this.getSessions();
+    const local = localSessions.find(s => s.room_code.toUpperCase() === normalized);
+
     const supabase = getSupabaseClient();
     if (supabase) {
       try {
@@ -2368,15 +2439,29 @@ export class AppStore {
           if (data.questions) {
             data.questions.sort((a: Question, b: Question) => a.question_order - b.question_order);
           }
-          return data as Session;
+          const merged: Session = {
+            ...(local || {}),
+            ...data,
+            timing_mode: data.timing_mode || local?.timing_mode || 'per_question',
+            overall_time_minutes: data.overall_time_minutes ?? local?.overall_time_minutes ?? 20,
+            overall_timer_end: data.overall_timer_end || local?.overall_timer_end,
+            per_question_duration: data.per_question_duration ?? local?.per_question_duration ?? 45,
+            show_leaderboard: data.show_leaderboard !== undefined ? data.show_leaderboard : (local?.show_leaderboard || false),
+          };
+          if (typeof window !== 'undefined') {
+            const idx = localSessions.findIndex(s => s.id === merged.id || s.room_code === merged.room_code);
+            if (idx >= 0) localSessions[idx] = merged;
+            else localSessions.unshift(merged);
+            localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(localSessions));
+          }
+          return merged;
         }
       } catch (err) {
         console.warn('Supabase getSession error, falling back to local:', err);
       }
     }
 
-    const sessions = this.getSessions();
-    return sessions.find(s => s.room_code.toUpperCase() === normalized) || null;
+    return local || null;
   }
 
   static async fetchSessions(): Promise<Session[]> {
@@ -2388,10 +2473,23 @@ export class AppStore {
           .select('*, questions(*), participants(*)')
           .order('created_at', { ascending: false });
         if (!error && data) {
+          const local = this.getSessions();
+          const merged = data.map(remoteSession => {
+            const loc = local.find(s => s.id === remoteSession.id || s.room_code === remoteSession.room_code);
+            return {
+              ...(loc || {}),
+              ...remoteSession,
+              timing_mode: remoteSession.timing_mode || loc?.timing_mode || 'per_question',
+              overall_time_minutes: remoteSession.overall_time_minutes ?? loc?.overall_time_minutes ?? 20,
+              overall_timer_end: remoteSession.overall_timer_end || loc?.overall_timer_end,
+              per_question_duration: remoteSession.per_question_duration ?? loc?.per_question_duration ?? 45,
+              show_leaderboard: remoteSession.show_leaderboard !== undefined ? remoteSession.show_leaderboard : (loc?.show_leaderboard || false),
+            } as Session;
+          });
           if (typeof window !== 'undefined') {
-            localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(data));
+            localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(merged));
           }
-          return data as Session[];
+          return merged;
         }
       } catch (err) {
         console.warn('Supabase fetchSessions error:', err);

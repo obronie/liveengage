@@ -505,8 +505,8 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
     setEditingSet(qs);
     setEditTitle(qs.title);
     setEditClientName(qs.client_name || '');
-    setEditTimingMode(qs.timing_mode || 'per_question');
-    setEditOverallTime(qs.overall_time_minutes || 20);
+    setEditTimingMode(qs.timing_mode || (qs.time_allowed_minutes && !qs.questions?.some(q => q.duration > 0) ? 'overall' : 'per_question'));
+    setEditOverallTime(qs.overall_time_minutes || qs.time_allowed_minutes || 20);
     setEditPerQuestionTime(qs.per_question_duration || qs.questions?.[0]?.duration || 45);
     setEditEntryMode(qs.default_entry_mode || 'group');
     setEditTargetLevel(qs.target_level || 'operational');
@@ -517,9 +517,14 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
     e.preventDefault();
     if (!editingSet) return;
 
-    const updatedQuestions = editingSet.questions.map(q => ({
+    const updatedQuestions = editingSet.questions.map((q, idx) => ({
       ...q,
       duration: editTimingMode === 'per_question' ? editPerQuestionTime : 0,
+      ...(idx === 0 ? {
+        _timing_mode: editTimingMode,
+        _overall_time_minutes: editTimingMode === 'overall' ? editOverallTime : undefined,
+        _per_question_duration: editTimingMode === 'per_question' ? editPerQuestionTime : undefined,
+      } : {}),
     }));
 
     const updatedSet: QuestionSet = {
@@ -529,6 +534,7 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
       timing_mode: editTimingMode,
       overall_time_minutes: editTimingMode === 'overall' ? editOverallTime : undefined,
       per_question_duration: editTimingMode === 'per_question' ? editPerQuestionTime : undefined,
+      time_allowed_minutes: editTimingMode === 'overall' ? editOverallTime : (editTimingMode === 'untimed' ? 0 : (editingSet.time_allowed_minutes || 20)),
       default_entry_mode: editEntryMode,
       target_level: editTargetLevel,
       questions: updatedQuestions,
@@ -536,13 +542,22 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
     };
 
     await AppStore.saveQuestionSet(updatedSet);
+    setQuestionSets(prev => {
+      const idx = prev.findIndex(s => s.id === updatedSet.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = updatedSet;
+        return next;
+      }
+      return [...prev, updatedSet];
+    });
     if (selectedSet?.id === updatedSet.id) {
       setSelectedSet(updatedSet);
     }
     setShowEditSetModal(false);
     setEditingSet(null);
     if (selectedCourse) {
-      loadClusters(selectedCourse.id);
+      await loadClusters(selectedCourse.id);
     }
   };
 
