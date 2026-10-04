@@ -702,6 +702,32 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
               <Plus className="w-3.5 h-3.5" />
               <span>New Course</span>
             </button>
+
+            {selectedCourse && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (confirm(`Are you sure you want to permanently delete course "${selectedCourse.code} — ${selectedCourse.title}"?\n\nWARNING: This will permanently delete all associated clusters, question banks, and uploaded documents from the cloud database.`)) {
+                    await AppStore.deleteCourse(selectedCourse.id);
+                    const updated = await AppStore.fetchCourses();
+                    setCourses(updated);
+                    if (updated.length > 0) {
+                      setSelectedCourse(updated[0]);
+                      loadClusters(updated[0].id);
+                    } else {
+                      setSelectedCourse(null);
+                      setClusters([]);
+                      setQuestionSets([]);
+                    }
+                  }
+                }}
+                title={`Delete Course: ${selectedCourse.code}`}
+                className="px-2.5 py-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-xs font-semibold rounded-xl border border-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Delete Course</span>
+              </button>
+            )}
           </div>
         </div>
 

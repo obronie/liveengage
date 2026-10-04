@@ -1852,15 +1852,18 @@ export class AppStore {
   // --- Course Operations ---
   static getCourses(): Course[] {
     if (typeof window === 'undefined') return INITIAL_COURSES;
+    const deletedIds: string[] = JSON.parse(localStorage.getItem('liveengage_deleted_courses') || '[]');
     const raw = localStorage.getItem(COURSES_STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(COURSES_STORAGE_KEY, JSON.stringify(INITIAL_COURSES));
-      return INITIAL_COURSES;
+      const filteredInit = INITIAL_COURSES.filter(c => !deletedIds.includes(c.id));
+      localStorage.setItem(COURSES_STORAGE_KEY, JSON.stringify(filteredInit));
+      return filteredInit;
     }
     try {
-      return JSON.parse(raw);
+      const parsed: Course[] = JSON.parse(raw);
+      return parsed.filter(c => !deletedIds.includes(c.id));
     } catch {
-      return INITIAL_COURSES;
+      return INITIAL_COURSES.filter(c => !deletedIds.includes(c.id));
     }
   }
 
@@ -1871,7 +1874,7 @@ export class AppStore {
         const { data, error } = await supabase
           .from('courses')
           .select('*, documents:course_documents(*)');
-        if (!error && data && data.length > 0) {
+        if (!error && Array.isArray(data)) {
           localStorage.setItem(COURSES_STORAGE_KEY, JSON.stringify(data));
           return data;
         }
@@ -1892,6 +1895,11 @@ export class AppStore {
     }
     if (typeof window !== 'undefined') {
       localStorage.setItem(COURSES_STORAGE_KEY, JSON.stringify(courses));
+      // If previously marked deleted, unmark it
+      const deletedIds: string[] = JSON.parse(localStorage.getItem('liveengage_deleted_courses') || '[]');
+      if (deletedIds.includes(course.id)) {
+        localStorage.setItem('liveengage_deleted_courses', JSON.stringify(deletedIds.filter(id => id !== course.id)));
+      }
     }
 
     const supabase = getSupabaseClient();
@@ -1930,7 +1938,24 @@ export class AppStore {
     const courses = this.getCourses().filter(c => c.id !== courseId);
     if (typeof window !== 'undefined') {
       localStorage.setItem(COURSES_STORAGE_KEY, JSON.stringify(courses));
+
+      // Track explicitly deleted courses to prevent initial fallback resurrection
+      const deletedIds: string[] = JSON.parse(localStorage.getItem('liveengage_deleted_courses') || '[]');
+      if (!deletedIds.includes(courseId)) {
+        deletedIds.push(courseId);
+        localStorage.setItem('liveengage_deleted_courses', JSON.stringify(deletedIds));
+      }
+
+      // Cascade delete associated clusters from localStorage
+      const allClusters = this.getClusters().filter(cl => cl.course_id !== courseId);
+      localStorage.setItem(CLUSTERS_STORAGE_KEY, JSON.stringify(allClusters));
+
+      // Cascade delete associated question sets from localStorage
+      const remainingClusterIds = new Set(allClusters.map(cl => cl.id));
+      const allSets = this.getQuestionSets().filter(s => remainingClusterIds.has(s.cluster_id));
+      localStorage.setItem(QUESTION_SETS_STORAGE_KEY, JSON.stringify(allSets));
     }
+
     const supabase = getSupabaseClient();
     if (supabase) {
       try {
@@ -1943,16 +1968,18 @@ export class AppStore {
 
   // --- Cluster Operations ---
   static getClusters(courseId?: string): CourseCluster[] {
-    if (typeof window === 'undefined') return INITIAL_CLUSTERS;
+    const deletedCourses: string[] = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('liveengage_deleted_courses') || '[]') : [];
+    const validInitClusters = INITIAL_CLUSTERS.filter(c => !deletedCourses.includes(c.course_id));
+    if (typeof window === 'undefined') return validInitClusters;
     const raw = localStorage.getItem(CLUSTERS_STORAGE_KEY);
-    let all: CourseCluster[] = INITIAL_CLUSTERS;
+    let all: CourseCluster[] = validInitClusters;
     if (raw) {
       try {
         all = JSON.parse(raw);
         // Ensure standard clusters exist and match official curriculum titles
         let changed = false;
-        for (const initCl of INITIAL_CLUSTERS) {
-          const existing = all.find(c => c.cluster_number === initCl.cluster_number);
+        for (const initCl of validInitClusters) {
+          const existing = all.find(c => c.cluster_number === initCl.cluster_number && c.course_id === initCl.course_id);
           if (!existing) {
             all.push(initCl);
             changed = true;

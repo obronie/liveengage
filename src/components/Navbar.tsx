@@ -27,7 +27,8 @@ import {
   CheckCircle2,
   Award,
   ShieldCheck,
-  ArrowRight
+  ArrowRight,
+  Trash2
 } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { AppStore } from '@/lib/store';
@@ -45,6 +46,8 @@ export function Navbar() {
   const [supabaseKey, setSupabaseKey] = useState('');
   const [isCloudActive, setIsCloudActive] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [coursesList, setCoursesList] = useState<Course[]>([]);
+  const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
 
   // Instant Launch Live State (1-Click, Zero Modals!)
   const [isLaunching, setIsLaunching] = useState(false);
@@ -64,6 +67,9 @@ export function Navbar() {
       setSupabaseUrl(storedSupaUrl);
       setSupabaseKey(storedSupaKey);
       setIsCloudActive(isSupabaseConfigured());
+      if (showSettings) {
+        AppStore.fetchCourses().then(list => setCoursesList(list));
+      }
     }
   }, [showSettings]);
 
@@ -251,8 +257,8 @@ export function Navbar() {
       {/* SETTINGS MODAL (Houses Session History Archive + Gemini & Cloud Config) */}
       {showSettings && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white border border-[#D5E3EF] rounded-2xl max-w-md w-full shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-[#D5E3EF] flex items-center justify-between bg-[#F1F9F3]">
+          <div className="bg-white border border-[#D5E3EF] rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="sticky top-0 z-10 px-6 py-4 border-b border-[#D5E3EF] flex items-center justify-between bg-[#F1F9F3]">
               <div className="flex items-center gap-2">
                 <Settings className="w-5 h-5 text-[#4682B4]" />
                 <h3 className="text-base font-bold text-slate-800">LearnBlended Settings</h3>
@@ -267,7 +273,71 @@ export function Navbar() {
 
             <div className="p-6 space-y-4">
               
-              {/* SESSION HISTORY & AUDIT ARCHIVE LINK (Cleanly placed in Settings!) */}
+              {/* COURSE MANAGEMENT & DELETION */}
+              <div className="p-3.5 bg-rose-50/70 border border-rose-200/80 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <BookOpen className="w-4 h-4 text-rose-600" />
+                    Course Management & Deletion
+                  </h4>
+                  <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold">
+                    {coursesList.length} course{coursesList.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Permanently remove registered courses, including their clusters, question banks, and uploaded framework documents from both local and cloud databases.
+                </p>
+
+                {coursesList.length > 0 ? (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-0.5">
+                    {coursesList.map((c) => (
+                      <div 
+                        key={c.id} 
+                        className="p-2.5 bg-white border border-rose-100 rounded-lg flex items-center justify-between gap-2 shadow-2xs"
+                      >
+                        <div className="min-w-0 pr-2">
+                          <div className="text-xs font-bold text-slate-800 truncate">
+                            {c.code} — {c.title}
+                          </div>
+                          <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
+                            <span className="bg-slate-100 px-1.5 py-0.5 rounded font-mono font-semibold">{c.code}</span>
+                            <span>•</span>
+                            <span>{c.is_qcto ? 'QCTO Framework' : 'Standard Course'}</span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={deletingCourseId === c.id}
+                          onClick={async () => {
+                            if (confirm(`Are you sure you want to permanently delete course "${c.code} — ${c.title}"?\n\nWARNING: This will delete all associated clusters and question banks from the cloud database.`)) {
+                              setDeletingCourseId(c.id);
+                              try {
+                                await AppStore.deleteCourse(c.id);
+                                const updated = await AppStore.fetchCourses();
+                                setCoursesList(updated);
+                                if (pathname.includes('/courses')) {
+                                  window.location.reload();
+                                }
+                              } finally {
+                                setDeletingCourseId(null);
+                              }
+                            }
+                          }}
+                          className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-md transition-colors flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>{deletingCourseId === c.id ? 'Deleting...' : 'Delete Course'}</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic py-1">No courses found in database.</p>
+                )}
+              </div>
+
+              {/* SESSION HISTORY & AUDIT ARCHIVE LINK */}
               <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-3">
                 <div>
                   <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
