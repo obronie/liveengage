@@ -332,6 +332,60 @@ export default function PresenterPage() {
     setParticipants(prev => prev.filter(p => p.id !== participantId));
   };
 
+  // Global Keyboard Shortcuts for Presenter (clicker & key navigation friendly)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        setShowLeaderboard(false);
+        setShowAnsweredDropdown(false);
+        return;
+      }
+
+      if (session?.status === 'lobby') {
+        if (e.key === ' ' || e.key === 'Enter' || e.key === 'F5' || e.key === 'PageDown' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          handleStartFirstQuestion();
+        }
+        return;
+      }
+
+      // Next Question: 'n', ArrowRight, or clicker Forward (PageDown)
+      if (e.key === 'n' || e.key === 'N' || e.key === 'ArrowRight' || e.key === 'PageDown') {
+        e.preventDefault();
+        handleNextQuestion();
+      } 
+      // Previous Question: 'p', ArrowLeft, or clicker Backward (PageUp)
+      else if (e.key === 'p' || e.key === 'P' || e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        handlePrevQuestion();
+      } 
+      // Reveal Results: 'r', or clicker Blank/Black button ('b' or '.')
+      else if (e.key === 'r' || e.key === 'R' || e.key === 'b' || e.key === 'B' || e.key === '.') {
+        e.preventDefault();
+        if (session?.status !== 'revealed') {
+          handleRevealAnswers();
+        }
+      } else if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault();
+        if (session?.status === 'question_active') {
+          handleLockSubmissions();
+        } else {
+          handleUnlockSubmissions();
+        }
+      } else if (e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        setShowLeaderboard(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [session, isTimerRunning]);
+
   if (!session) {
     return (
       <div className="min-h-screen bg-[#0a0f1d] flex items-center justify-center text-white font-sans">
@@ -393,60 +447,6 @@ export default function PresenterPage() {
   const answeredParticipantIds = new Set(responses.map(r => r.participant_id));
   const answeredParticipants = participants.filter(p => answeredParticipantIds.has(p.id));
   const pendingParticipants = participants.filter(p => !answeredParticipantIds.has(p.id));
-
-  // Global Keyboard Shortcuts for Presenter (clicker & key navigation friendly)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-
-      if (e.key === 'Escape') {
-        setShowLeaderboard(false);
-        setShowAnsweredDropdown(false);
-        return;
-      }
-
-      if (session?.status === 'lobby') {
-        if (e.key === ' ' || e.key === 'Enter' || e.key === 'F5' || e.key === 'PageDown' || e.key === 'ArrowRight') {
-          e.preventDefault();
-          handleStartFirstQuestion();
-        }
-        return;
-      }
-
-      // Next Question: 'n', ArrowRight, or clicker Forward (PageDown)
-      if (e.key === 'n' || e.key === 'N' || e.key === 'ArrowRight' || e.key === 'PageDown') {
-        e.preventDefault();
-        handleNextQuestion();
-      } 
-      // Previous Question: 'p', ArrowLeft, or clicker Backward (PageUp)
-      else if (e.key === 'p' || e.key === 'P' || e.key === 'ArrowLeft' || e.key === 'PageUp') {
-        e.preventDefault();
-        handlePrevQuestion();
-      } 
-      // Reveal Results: 'r', or clicker Blank/Black button ('b' or '.')
-      else if (e.key === 'r' || e.key === 'R' || e.key === 'b' || e.key === 'B' || e.key === '.') {
-        e.preventDefault();
-        if (session?.status !== 'revealed') {
-          handleRevealAnswers();
-        }
-      } else if (e.key === 'l' || e.key === 'L') {
-        e.preventDefault();
-        if (session?.status === 'question_active') {
-          handleLockSubmissions();
-        } else {
-          handleUnlockSubmissions();
-        }
-      } else if (e.key === 's' || e.key === 'S') {
-        e.preventDefault();
-        setShowLeaderboard(prev => !prev);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [session, currentQuestion, isTimerRunning]);
 
   return (
     <div className="min-h-screen bg-[#0a0f1d] text-slate-100 flex flex-col select-none overflow-hidden font-sans">
