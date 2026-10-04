@@ -15,6 +15,7 @@ import {
   EyeOff,
   ChevronRight, 
   ChevronLeft, 
+  ChevronDown,
   Trophy, 
   Maximize2, 
   Minimize2, 
@@ -50,6 +51,7 @@ export default function PresenterPage() {
   // Presenter view modes
   const [showLeaderboard, setShowLeaderboard] = useState<boolean>(false);
   const [showRationale, setShowRationale] = useState<boolean>(true); // Shared Classroom Debrief Card Toggle
+  const [showAnsweredDropdown, setShowAnsweredDropdown] = useState<boolean>(false); // Top right answered tracker popover
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -229,7 +231,7 @@ export default function PresenterPage() {
       const updated: Session = { 
         ...session, 
         status: 'completed',
-        completed_at: new Date().toISOString()
+        completed_at: session.completed_at || new Date().toISOString()
       };
       setSession(updated);
       await AppStore.saveSession(updated);
@@ -239,18 +241,20 @@ export default function PresenterPage() {
     }
 
     const nextQ = session.questions[nextIdx];
+    const isPostSessionReview = !!session.completed_at;
     const duration = nextQ.duration > 0 ? nextQ.duration : 60;
+
     const updated: Session = {
       ...session,
       current_question_index: nextIdx,
-      status: 'question_active',
-      question_timer_end: new Date(Date.now() + duration * 1000).toISOString(),
+      status: isPostSessionReview ? 'question_locked' : 'question_active',
+      question_timer_end: isPostSessionReview ? undefined : new Date(Date.now() + duration * 1000).toISOString(),
     };
 
     setSession(updated);
-    setTimeLeft(duration);
+    setTimeLeft(isPostSessionReview ? 0 : duration);
     setInitialDuration(duration);
-    setIsTimerRunning(nextQ.duration > 0);
+    setIsTimerRunning(!isPostSessionReview && nextQ.duration > 0);
     setResponses(AppStore.getResponses(session.id, nextQ.id));
     setHiddenWords(AppStore.getHiddenWords(nextQ.id));
     setShowLeaderboard(false);
@@ -262,21 +266,46 @@ export default function PresenterPage() {
     if (!session || !session.questions || session.current_question_index <= 0) return;
     const prevIdx = session.current_question_index - 1;
     const prevQ = session.questions[prevIdx];
+    const isPostSessionReview = !!session.completed_at;
     const duration = prevQ.duration > 0 ? prevQ.duration : 60;
 
     const updated: Session = {
       ...session,
       current_question_index: prevIdx,
-      status: 'question_active',
+      status: isPostSessionReview ? 'question_locked' : 'question_active',
+      question_timer_end: isPostSessionReview ? undefined : new Date(Date.now() + duration * 1000).toISOString(),
     };
 
     setSession(updated);
-    setTimeLeft(duration);
+    setTimeLeft(isPostSessionReview ? 0 : duration);
     setInitialDuration(duration);
-    setIsTimerRunning(prevQ.duration > 0);
+    setIsTimerRunning(!isPostSessionReview && prevQ.duration > 0);
     setResponses(AppStore.getResponses(session.id, prevQ.id));
     setHiddenWords(AppStore.getHiddenWords(prevQ.id));
     setShowLeaderboard(false);
+    setShowRationale(true);
+    await AppStore.saveSession(updated);
+  };
+
+  // Jump to Beginning (Question 1) to review questions together with answers hidden until Reveal is clicked
+  const handleJumpToBeginningReview = async () => {
+    if (!session || !session.questions || session.questions.length === 0) return;
+    const firstQ = session.questions[0];
+
+    const updated: Session = {
+      ...session,
+      current_question_index: 0,
+      status: 'question_locked', // Locked so answers remain hidden until facilitator clicks Reveal Results
+      question_timer_end: undefined,
+    };
+
+    setSession(updated);
+    setIsTimerRunning(false);
+    setTimeLeft(0);
+    setResponses(AppStore.getResponses(session.id, firstQ.id));
+    setHiddenWords(AppStore.getHiddenWords(firstQ.id));
+    setShowLeaderboard(false);
+    setShowRationale(true);
     await AppStore.saveSession(updated);
   };
 
@@ -360,6 +389,60 @@ export default function PresenterPage() {
 
   const rankedParticipants = [...participants].sort((a, b) => b.score - a.score);
 
+  // Live Answered vs Pending status tracking
+  const answeredParticipantIds = new Set(responses.map(r => r.participant_id));
+  const answeredParticipants = participants.filter(p => answeredParticipantIds.has(p.id));
+  const pendingParticipants = participants.filter(p => !answeredParticipantIds.has(p.id));
+
+  // Global Keyboard Shortcuts for Presenter (clicker & key navigation friendly)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        setShowLeaderboard(false);
+        setShowAnsweredDropdown(false);
+        return;
+      }
+
+      if (session?.status === 'lobby') {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          handleStartFirstQuestion();
+        }
+        return;
+      }
+
+      if (e.key === 'n' || e.key === 'N' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleNextQuestion();
+      } else if (e.key === 'p' || e.key === 'P' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handlePrevQuestion();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        if (session?.status !== 'revealed') {
+          handleRevealAnswers();
+        }
+      } else if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault();
+        if (session?.status === 'question_active') {
+          handleLockSubmissions();
+        } else {
+          handleUnlockSubmissions();
+        }
+      } else if (e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        setShowLeaderboard(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [session, currentQuestion, isTimerRunning]);
+
   return (
     <div className="min-h-screen bg-[#0a0f1d] text-slate-100 flex flex-col select-none overflow-hidden font-sans">
       {/* Top Projector Header Bar */}
@@ -387,7 +470,80 @@ export default function PresenterPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          {/* Live Answered Status Tracker on Top Right */}
+          {session.status !== 'lobby' && (
+            <div className="relative">
+              <button
+                onClick={() => setShowAnsweredDropdown(prev => !prev)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0a0f1d] hover:bg-slate-800 border border-[#1e2e4a] text-xs font-semibold transition-colors"
+                title="Click to see who has answered vs pending"
+              >
+                <CheckCircle2 className="w-4 h-4 text-[#6DC082]" />
+                <span>
+                  Answered: <strong className="text-white font-mono">{answeredParticipants.length}</strong> / {participants.length}
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${showAnsweredDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Popover showing Answered vs Pending */}
+              {showAnsweredDropdown && (
+                <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-[#121b2d] border border-[#1e2e4a] shadow-2xl p-3 z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#1e2e4a]">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Submission Tracker
+                    </span>
+                    <span className="text-xs font-mono font-bold text-[#6DC082]">
+                      {answeredParticipants.length}/{participants.length} Answered
+                    </span>
+                  </div>
+
+                  <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                    {/* Answered List */}
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-[#6DC082] mb-1.5 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Answered ({answeredParticipants.length})
+                      </div>
+                      {answeredParticipants.length === 0 ? (
+                        <p className="text-[11px] text-slate-500 italic pl-1">Awaiting first answer...</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {answeredParticipants.map(p => (
+                            <span
+                              key={p.id}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-medium"
+                            >
+                              ✓ {p.display_name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Pending List */}
+                    {pendingParticipants.length > 0 && (
+                      <div className="pt-2 border-t border-[#1e2e4a]/60">
+                        <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-400 mb-1.5 flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> Waiting ({pendingParticipants.length})
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {pendingParticipants.map(p => (
+                            <span
+                              key={p.id}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-400 text-[11px] font-medium"
+                            >
+                              ⏳ {p.display_name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Connected Participants Counter */}
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0a0f1d] border border-[#1e2e4a] text-xs font-semibold text-slate-300">
             <Users className="w-4 h-4 text-[#6DC082]" />
@@ -554,11 +710,40 @@ export default function PresenterPage() {
               </div>
 
               {/* Question Stem */}
-              <div className="pt-2 pb-4">
+              <div className="pt-2 pb-2">
                 <h2 className="text-2xl sm:text-4xl font-extrabold text-white leading-tight">
                   {currentQuestion.body}
                 </h2>
               </div>
+
+              {/* Live Participant Turn-In Status Strip */}
+              {participants.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 pb-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    Live Turn-in:
+                  </span>
+                  {participants.map(p => {
+                    const hasAnswered = answeredParticipantIds.has(p.id);
+                    return (
+                      <span
+                        key={p.id}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                          hasAnswered
+                            ? 'bg-[#6DC082]/20 text-[#6DC082] border border-[#6DC082]/40 shadow-sm shadow-[#6DC082]/20'
+                            : 'bg-slate-900/80 text-slate-500 border border-slate-800'
+                        }`}
+                      >
+                        {hasAnswered ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-[#6DC082]" />
+                        ) : (
+                          <span className="w-2 h-2 rounded-full bg-slate-600 animate-pulse" />
+                        )}
+                        <span>{p.display_name}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Answer Display Area: Structured Choices or Word Cloud */}
@@ -733,15 +918,16 @@ export default function PresenterPage() {
 
             {/* Bottom Live Controls Bar */}
             <div className="pt-4 border-t border-[#1e2e4a] flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold text-slate-400">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xs font-semibold text-slate-400 mr-1">
                   Submissions: <strong className="text-white font-mono">{responses.length}</strong> / {participants.length}
                 </span>
 
                 {/* Extra time */}
                 <button
                   onClick={() => handleAddExtraTime(15)}
-                  className="px-3 py-1.5 rounded-lg bg-[#121b2d] hover:bg-slate-800 text-xs font-semibold text-slate-200 border border-[#1e2e4a] flex items-center gap-1 transition-colors"
+                  className="px-2.5 py-1.5 rounded-lg bg-[#121b2d] hover:bg-slate-800 text-xs font-semibold text-slate-200 border border-[#1e2e4a] flex items-center gap-1 transition-colors"
+                  title="Add 15 seconds to question countdown"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>+15s</span>
@@ -751,7 +937,7 @@ export default function PresenterPage() {
                 {session.status === 'question_active' ? (
                   <button
                     onClick={handleLockSubmissions}
-                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                    className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition-colors"
                   >
                     <Lock className="w-3.5 h-3.5" />
                     <span>Lock [L]</span>
@@ -759,15 +945,36 @@ export default function PresenterPage() {
                 ) : (
                   <button
                     onClick={handleUnlockSubmissions}
-                    className="px-3 py-1.5 rounded-lg bg-[#121b2d] hover:bg-slate-800 text-slate-300 border border-[#1e2e4a] text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                    className="px-2.5 py-1.5 rounded-lg bg-[#121b2d] hover:bg-slate-800 text-slate-300 border border-[#1e2e4a] text-xs font-semibold flex items-center gap-1.5 transition-colors"
                   >
                     <Unlock className="w-3.5 h-3.5" />
                     <span>Re-open</span>
                   </button>
                 )}
+
+                {/* Jump to Beginning (Q1) Review Button */}
+                <button
+                  onClick={handleJumpToBeginningReview}
+                  className="px-2.5 py-1.5 rounded-lg bg-[#121b2d] hover:bg-slate-800 text-xs font-semibold text-sky-400 border border-[#1e2e4a] flex items-center gap-1.5 transition-colors"
+                  title="Jump directly to Question 1 with answers hidden for cohort review"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Q1</span>
+                </button>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                {/* Previous Question [P] */}
+                <button
+                  onClick={handlePrevQuestion}
+                  disabled={session.current_question_index <= 0}
+                  className="px-3 py-2 rounded-xl bg-[#121b2d] hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-[#121b2d] text-slate-300 font-semibold text-xs border border-[#1e2e4a] flex items-center gap-1.5 transition-colors"
+                  title="Previous Question [P]"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Prev [P]</span>
+                </button>
+
                 {/* 1-Click Show / Hide Rationale on Projector Screen */}
                 {session.status === 'revealed' && currentQuestion.additional_text && (
                   <button
@@ -780,6 +987,7 @@ export default function PresenterPage() {
                   </button>
                 )}
 
+                {/* Scores Standings */}
                 <button
                   onClick={() => setShowLeaderboard(!showLeaderboard)}
                   className="px-3.5 py-2 rounded-xl bg-[#121b2d] hover:bg-slate-800 text-amber-400 font-semibold text-xs border border-[#1e2e4a] flex items-center gap-1.5 transition-colors"
@@ -792,24 +1000,31 @@ export default function PresenterPage() {
                 {session.status !== 'revealed' ? (
                   <button
                     onClick={handleRevealAnswers}
-                    className="px-5 py-2 rounded-xl bg-[#6DC082] hover:bg-[#5cb372] text-white font-bold text-xs shadow-lg shadow-[#6DC082]/30 flex items-center gap-2 transition-all"
+                    className="px-4 sm:px-5 py-2 rounded-xl bg-[#6DC082] hover:bg-[#5cb372] text-white font-bold text-xs shadow-lg shadow-[#6DC082]/30 flex items-center gap-2 transition-all"
                   >
                     <Eye className="w-4 h-4" />
                     <span>Reveal Results [R]</span>
                   </button>
                 ) : (
-                  <button
-                    onClick={handleNextQuestion}
-                    className="px-5 py-2 rounded-xl bg-[#4682B4] hover:bg-[#3b6f9a] text-white font-bold text-xs shadow-lg shadow-[#4682B4]/30 flex items-center gap-2 transition-all"
-                  >
-                    <span>
-                      {session.current_question_index + 1 >= (session.questions?.length || 0)
-                        ? 'Finish Session'
-                        : 'Next Question [N]'}
-                    </span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+                  <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Revealed</span>
+                  </span>
                 )}
+
+                {/* Always-on Next Question [N] Button */}
+                <button
+                  onClick={handleNextQuestion}
+                  className="px-4 sm:px-5 py-2 rounded-xl bg-[#4682B4] hover:bg-[#3b6f9a] text-white font-bold text-xs shadow-lg shadow-[#4682B4]/30 flex items-center gap-2 transition-all"
+                  title="Next Question [N] (available at all times)"
+                >
+                  <span>
+                    {session.current_question_index + 1 >= (session.questions?.length || 0)
+                      ? 'Finish Session'
+                      : 'Next Question [N]'}
+                  </span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </div>
@@ -824,7 +1039,14 @@ export default function PresenterPage() {
               Results and submission timestamps have been automatically archived.
             </p>
 
-            <div className="mt-8 flex items-center gap-3">
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+              <button
+                onClick={handleJumpToBeginningReview}
+                className="px-6 py-3 rounded-xl bg-[#4682B4] hover:bg-[#3b6f9a] text-white font-bold text-sm transition-all flex items-center gap-2 shadow-lg shadow-[#4682B4]/25"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Review from Beginning (Q1)</span>
+              </button>
               <button
                 onClick={() => setShowLeaderboard(true)}
                 className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold text-sm transition-colors flex items-center gap-2 shadow-lg"
