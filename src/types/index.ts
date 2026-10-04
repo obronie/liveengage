@@ -63,6 +63,9 @@ export interface QuestionSet {
   default_entry_mode: SessionEntryMode;
   total_marks?: number; // Sum of marks for formal cluster assessment
   time_allowed_minutes?: number; // e.g. 30, 45, 60 minutes
+  timing_mode?: 'per_question' | 'overall' | 'untimed';
+  overall_time_minutes?: number; // e.g. 20 for 20 minutes
+  per_question_duration?: number; // e.g. 45 for 45s
   questions: Question[];
   created_at: string;
   updated_at: string;
@@ -105,6 +108,11 @@ export interface Session {
   current_question_index: number;
   facilitator_instructions?: string;
   question_timer_end?: string | null; // ISO timestamp
+  timing_mode?: 'per_question' | 'overall' | 'untimed';
+  overall_time_minutes?: number;
+  overall_timer_end?: string | null;
+  per_question_duration?: number;
+  show_leaderboard?: boolean;
   created_at: string;
   completed_at?: string | null;
   course?: Course;

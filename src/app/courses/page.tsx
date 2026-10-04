@@ -50,7 +50,8 @@ import {
   QrCode,
   Monitor,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Edit3
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -75,6 +76,22 @@ export default function CoursesPage() {
   const [fsaPaperMode, setFsaPaperMode] = useState<'paper' | 'projector' | 'memo'>('paper');
   const [isProjectorFullscreen, setIsProjectorFullscreen] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
+
+  // Timing Mode state for Generator
+  const [timingMode, setTimingMode] = useState<'overall' | 'per_question' | 'untimed'>('per_question');
+  const [overallTimeMinutes, setOverallTimeMinutes] = useState<number>(20);
+  const [perQuestionDuration, setPerQuestionDuration] = useState<number>(45);
+
+  // Edit Question Set Modal state
+  const [showEditSetModal, setShowEditSetModal] = useState<boolean>(false);
+  const [editingSet, setEditingSet] = useState<QuestionSet | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editClientName, setEditClientName] = useState('');
+  const [editTimingMode, setEditTimingMode] = useState<'overall' | 'per_question' | 'untimed'>('per_question');
+  const [editOverallTime, setEditOverallTime] = useState<number>(20);
+  const [editPerQuestionTime, setEditPerQuestionTime] = useState<number>(45);
+  const [editEntryMode, setEditEntryMode] = useState<'individual' | 'group'>('group');
+  const [editTargetLevel, setEditTargetLevel] = useState<CognitiveTargetLevel>('operational');
 
   // Course Form (with QCTO Master IAC mapping)
   const [courseCode, setCourseCode] = useState('');
@@ -428,7 +445,7 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
         additional_text: q.additionalText,
         options: q.options || [],
         correct_options: q.correctOptions || [0],
-        duration: q.duration || 45,
+        duration: timingMode === 'per_question' ? perQuestionDuration : 0,
         marks: q.marks || (q.body.toLowerCase().includes('variance') || q.body.toLowerCase().includes('vat') || q.body.toLowerCase().includes('calculat') || q.body.toLowerCase().includes('courier') ? 3 : 2),
         guide_topic_hint: q.guideTopicHint || '',
       }));
@@ -460,8 +477,11 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
         custom_background_context: isCustomSet ? customContext : '',
         target_level: targetLevel,
         default_entry_mode: defaultEntryMode,
+        timing_mode: timingMode,
+        overall_time_minutes: timingMode === 'overall' ? overallTimeMinutes : undefined,
+        per_question_duration: timingMode === 'per_question' ? perQuestionDuration : undefined,
         total_marks: calculatedTotalMarks,
-        time_allowed_minutes: isFsaMockSet ? (activeCluster.weighting_percentage && activeCluster.weighting_percentage >= 45 ? 45 : 30) : 30,
+        time_allowed_minutes: timingMode === 'overall' ? overallTimeMinutes : (isFsaMockSet ? (activeCluster.weighting_percentage && activeCluster.weighting_percentage >= 45 ? 45 : 30) : 30),
         questions: mappedQuestions,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -476,6 +496,53 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
       setGenError(err.message);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // --- Edit Question Set Settings Handlers ---
+  const handleOpenEditSet = (qs: QuestionSet, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingSet(qs);
+    setEditTitle(qs.title);
+    setEditClientName(qs.client_name || '');
+    setEditTimingMode(qs.timing_mode || 'per_question');
+    setEditOverallTime(qs.overall_time_minutes || 20);
+    setEditPerQuestionTime(qs.per_question_duration || qs.questions?.[0]?.duration || 45);
+    setEditEntryMode(qs.default_entry_mode || 'group');
+    setEditTargetLevel(qs.target_level || 'operational');
+    setShowEditSetModal(true);
+  };
+
+  const handleSaveEditSet = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSet) return;
+
+    const updatedQuestions = editingSet.questions.map(q => ({
+      ...q,
+      duration: editTimingMode === 'per_question' ? editPerQuestionTime : 0,
+    }));
+
+    const updatedSet: QuestionSet = {
+      ...editingSet,
+      title: editTitle.trim(),
+      client_name: editClientName.trim() || 'Generic Standard',
+      timing_mode: editTimingMode,
+      overall_time_minutes: editTimingMode === 'overall' ? editOverallTime : undefined,
+      per_question_duration: editTimingMode === 'per_question' ? editPerQuestionTime : undefined,
+      default_entry_mode: editEntryMode,
+      target_level: editTargetLevel,
+      questions: updatedQuestions,
+      updated_at: new Date().toISOString(),
+    };
+
+    await AppStore.saveQuestionSet(updatedSet);
+    if (selectedSet?.id === updatedSet.id) {
+      setSelectedSet(updatedSet);
+    }
+    setShowEditSetModal(false);
+    setEditingSet(null);
+    if (selectedCourse) {
+      loadClusters(selectedCourse.id);
     }
   };
 
@@ -522,7 +589,7 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
       additional_text: 'EISA Assessment Standard 1.1: Physical shortage (-8) + damaged stock (-4) = -12 units total variance.',
       options: ['-12 units variance [Endorse Delivery Note]', '-8 units variance', '+8 units variance', 'No variance'],
       correct_options: [0],
-      duration: 45,
+      duration: selectedSet.timing_mode === 'per_question' ? (selectedSet.per_question_duration || 45) : 0,
       marks: 3,
       guide_topic_hint: 'EISA Receiving Variance Standard',
     };
@@ -557,6 +624,9 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
       client_name: selectedSet.client_name || 'Generic Standard',
       cohort_number: 1,
       entry_mode: selectedSet.default_entry_mode || 'group',
+      timing_mode: selectedSet.timing_mode || 'per_question',
+      overall_time_minutes: selectedSet.overall_time_minutes || 20,
+      per_question_duration: selectedSet.per_question_duration || 45,
       status: 'lobby',
       current_question_index: 0,
       facilitator_instructions: 'Refer to your Learner Guide during answering. Deliberate with your table before locking in.',
@@ -818,6 +888,21 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
               <div className="space-y-4 max-h-[calc(100vh-260px)] overflow-y-auto pr-1">
                 {(filterClusterId === 'all' ? clusters : clusters.filter(c => c.id === filterClusterId)).map((cluster) => {
                   const clusterSets = AppStore.getQuestionSets(cluster.id);
+                  const sortedClusterSets = [...clusterSets].sort((a, b) => {
+                    const aIsGeneric = (!a.is_custom && !a.is_fsa_mock) || a.client_name === 'Generic Standard';
+                    const bIsGeneric = (!b.is_custom && !b.is_fsa_mock) || b.client_name === 'Generic Standard';
+                    if (aIsGeneric && !bIsGeneric) return -1;
+                    if (!aIsGeneric && bIsGeneric) return 1;
+
+                    const aIsFsa = !!a.is_fsa_mock;
+                    const bIsFsa = !!b.is_fsa_mock;
+                    if (aIsFsa && !bIsFsa) return -1;
+                    if (!aIsFsa && bIsFsa) return 1;
+
+                    const aName = (a.client_name || a.title || '').toLowerCase();
+                    const bName = (b.client_name || b.title || '').toLowerCase();
+                    return aName.localeCompare(bName);
+                  });
 
                   return (
                     <div key={cluster.id} className="space-y-2">
@@ -842,7 +927,7 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                             </span>
                           )}
                           <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                            {clusterSets.length}
+                            {sortedClusterSets.length}
                           </span>
                           <button
                             type="button"
@@ -859,9 +944,9 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                         </div>
                       </div>
 
-                      {/* Question Sets for this Cluster */}
+                      {/* Question Sets for this Cluster: Generic Standard first, then FSA Mock, then Custom alphabetically */}
                       <div className="space-y-2">
-                        {clusterSets.map((qs) => {
+                        {sortedClusterSets.map((qs) => {
                           const isSelected = selectedSet?.id === qs.id;
                           const isGeneric = !qs.is_custom || qs.client_name === 'Generic Standard';
 
@@ -884,7 +969,7 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                                 className="p-3 cursor-pointer"
                               >
                                 <div className="flex items-start gap-2.5">
-                                  {/* Cluster Number Badge (Replacing Set 1 / Set 2) */}
+                                  {/* Cluster Number Badge */}
                                   <div className={`w-9 h-9 rounded-lg font-mono font-extrabold text-xs flex items-center justify-center shrink-0 border ${
                                     isSelected
                                       ? 'bg-[#4682B4] text-white border-[#4682B4]'
@@ -898,15 +983,25 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                                       <h4 className="text-xs font-bold text-slate-800 truncate">
                                         {qs.title}
                                       </h4>
-                                      <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
-                                        qs.is_fsa_mock
-                                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                          : isGeneric 
-                                            ? 'bg-blue-100 text-blue-800 border border-blue-200' 
-                                            : 'bg-amber-100 text-amber-800 border border-amber-200'
-                                      }`}>
-                                        {qs.is_fsa_mock ? 'FSA Mock' : isGeneric ? 'Generic' : 'Custom'}
-                                      </span>
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded-full ${
+                                          qs.is_fsa_mock
+                                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                            : isGeneric 
+                                              ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                                              : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                        }`}>
+                                          {qs.is_fsa_mock ? 'FSA Mock' : isGeneric ? 'Generic' : 'Custom'}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => handleOpenEditSet(qs, e)}
+                                          className="p-1 text-slate-400 hover:text-[#4682B4] hover:bg-[#4682B4]/15 rounded transition-colors"
+                                          title="Edit Question Set settings"
+                                        >
+                                          <Edit3 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
                                     </div>
 
                                     <div className="flex items-center gap-1.5 text-[11px] text-slate-600">
@@ -920,15 +1015,30 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                                     <div className="flex items-center gap-2 flex-wrap mt-2 pt-1.5 border-t border-slate-100 text-[10.5px] text-slate-500 font-medium">
                                       <span className="flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded">
                                         <FileText className="w-3 h-3 text-[#4682B4]" />
-                                        {qs.questions?.length || 0} Questions
+                                        {qs.questions?.length || 0} Qs
                                       </span>
-                                      <span className="flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded">
-                                        <Clock className="w-3 h-3 text-[#4682B4]" />
-                                        {qs.questions?.[0]?.duration || 45}s timer
-                                      </span>
+
+                                      {/* Timing Badge */}
+                                      {qs.timing_mode === 'overall' ? (
+                                        <span className="flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded font-semibold text-[10.5px]">
+                                          <Clock className="w-3 h-3 text-amber-600" />
+                                          {qs.overall_time_minutes || 20}m overall
+                                        </span>
+                                      ) : qs.timing_mode === 'untimed' ? (
+                                        <span className="flex items-center gap-1 bg-purple-50 text-purple-800 border border-purple-200 px-1.5 py-0.5 rounded font-semibold text-[10.5px]">
+                                          <Clock className="w-3 h-3 text-purple-600" />
+                                          Untimed (Manual)
+                                        </span>
+                                      ) : (
+                                        <span className="flex items-center gap-1 bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-medium text-[10.5px]">
+                                          <Clock className="w-3 h-3 text-[#4682B4]" />
+                                          {qs.per_question_duration || qs.questions?.[0]?.duration || 45}s / q
+                                        </span>
+                                      )}
+
                                       <span className="flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded capitalize">
                                         <Users className="w-3 h-3 text-[#4682B4]" />
-                                        {qs.default_entry_mode || 'group'} mode
+                                        {qs.default_entry_mode || 'group'}
                                       </span>
                                     </div>
                                   </div>
@@ -1926,6 +2036,106 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                 </div>
               </div>
 
+              {/* Timing Options */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-[#4682B4]" />
+                    Session Timing Mode & Duration:
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-normal">
+                    Controls classroom countdown & learner pace
+                  </span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTimingMode('overall')}
+                    className={`p-2.5 rounded-lg border text-left text-xs transition-all ${
+                      timingMode === 'overall'
+                        ? 'bg-[#4682B4] text-white border-[#4682B4] shadow-xs'
+                        : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <div className="font-bold flex items-center justify-between">
+                      <span>Overall Time</span>
+                      <span className={`text-[10px] px-1 rounded ${timingMode === 'overall' ? 'bg-white/20' : 'bg-slate-100'}`}>Total</span>
+                    </div>
+                    <p className={`text-[10px] mt-0.5 ${timingMode === 'overall' ? 'text-white/80' : 'text-slate-500'}`}>
+                      e.g. 20 min session
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTimingMode('per_question')}
+                    className={`p-2.5 rounded-lg border text-left text-xs transition-all ${
+                      timingMode === 'per_question'
+                        ? 'bg-[#4682B4] text-white border-[#4682B4] shadow-xs'
+                        : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <div className="font-bold flex items-center justify-between">
+                      <span>Per Question</span>
+                      <span className={`text-[10px] px-1 rounded ${timingMode === 'per_question' ? 'bg-white/20' : 'bg-slate-100'}`}>Standard</span>
+                    </div>
+                    <p className={`text-[10px] mt-0.5 ${timingMode === 'per_question' ? 'text-white/80' : 'text-slate-500'}`}>
+                      e.g. 45s countdown
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTimingMode('untimed')}
+                    className={`p-2.5 rounded-lg border text-left text-xs transition-all ${
+                      timingMode === 'untimed'
+                        ? 'bg-[#4682B4] text-white border-[#4682B4] shadow-xs'
+                        : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <div className="font-bold flex items-center justify-between">
+                      <span>Untimed / Manual</span>
+                      <span className={`text-[10px] px-1 rounded ${timingMode === 'untimed' ? 'bg-white/20' : 'bg-slate-100'}`}>No Timer</span>
+                    </div>
+                    <p className={`text-[10px] mt-0.5 ${timingMode === 'untimed' ? 'text-white/80' : 'text-slate-500'}`}>
+                      Facilitator-paced
+                    </p>
+                  </button>
+                </div>
+
+                {timingMode === 'overall' && (
+                  <div className="flex items-center gap-2 pt-1 text-xs">
+                    <span className="text-slate-600 font-medium">Total Session Duration:</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={120}
+                      value={overallTimeMinutes}
+                      onChange={(e) => setOverallTimeMinutes(Math.max(1, Number(e.target.value)))}
+                      className="w-20 px-2 py-1 border border-slate-300 rounded font-bold text-center bg-white"
+                    />
+                    <span className="text-slate-500 font-semibold">minutes</span>
+                  </div>
+                )}
+
+                {timingMode === 'per_question' && (
+                  <div className="flex items-center gap-2 pt-1 text-xs">
+                    <span className="text-slate-600 font-medium">Duration per Question:</span>
+                    <select
+                      value={perQuestionDuration}
+                      onChange={(e) => setPerQuestionDuration(Number(e.target.value))}
+                      className="px-2 py-1 border border-slate-300 rounded font-bold bg-white"
+                    >
+                      <option value={30}>30 seconds</option>
+                      <option value={45}>45 seconds</option>
+                      <option value={60}>60 seconds</option>
+                      <option value={90}>90 seconds</option>
+                      <option value={120}>120 seconds (Complex quantitative)</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
               {genError && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
                   {genError}
@@ -1956,6 +2166,178 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                       <span>Generate Question Set</span>
                     </>
                   )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT QUESTION SET SETTINGS MODAL */}
+      {showEditSetModal && editingSet && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white border border-[#D5E3EF] rounded-2xl max-w-lg w-full shadow-2xl p-6 space-y-4 my-8 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2 text-[#4682B4]">
+                <Edit3 className="w-5 h-5" />
+                <h3 className="text-base font-bold text-slate-800">
+                  Edit Question Set Settings
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditSetModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditSet} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                  Question Set Title
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#4682B4] font-bold text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                  Client / Workplace Association
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editClientName}
+                  onChange={(e) => setEditClientName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#4682B4]"
+                />
+              </div>
+
+              {/* Timing Options */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-[#4682B4]" />
+                    Timing Options
+                  </span>
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditTimingMode('overall')}
+                    className={`p-2 rounded-lg border text-xs font-bold transition-all ${
+                      editTimingMode === 'overall'
+                        ? 'bg-[#4682B4] text-white border-[#4682B4]'
+                        : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    Overall
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditTimingMode('per_question')}
+                    className={`p-2 rounded-lg border text-xs font-bold transition-all ${
+                      editTimingMode === 'per_question'
+                        ? 'bg-[#4682B4] text-white border-[#4682B4]'
+                        : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    Per-Question
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditTimingMode('untimed')}
+                    className={`p-2 rounded-lg border text-xs font-bold transition-all ${
+                      editTimingMode === 'untimed'
+                        ? 'bg-[#4682B4] text-white border-[#4682B4]'
+                        : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    Untimed
+                  </button>
+                </div>
+
+                {editTimingMode === 'overall' && (
+                  <div className="flex items-center gap-2 pt-1 text-xs">
+                    <span className="text-slate-600 font-medium">Session Duration:</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={120}
+                      value={editOverallTime}
+                      onChange={(e) => setEditOverallTime(Math.max(1, Number(e.target.value)))}
+                      className="w-20 px-2 py-1 border border-slate-300 rounded font-bold text-center bg-white"
+                    />
+                    <span className="text-slate-500 font-semibold">minutes</span>
+                  </div>
+                )}
+
+                {editTimingMode === 'per_question' && (
+                  <div className="flex items-center gap-2 pt-1 text-xs">
+                    <span className="text-slate-600 font-medium">Seconds per Question:</span>
+                    <select
+                      value={editPerQuestionTime}
+                      onChange={(e) => setEditPerQuestionTime(Number(e.target.value))}
+                      className="px-2 py-1 border border-slate-300 rounded font-bold bg-white"
+                    >
+                      <option value={30}>30s</option>
+                      <option value={45}>45s</option>
+                      <option value={60}>60s</option>
+                      <option value={90}>90s</option>
+                      <option value={120}>120s</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 mb-1 block">Default Entry Mode</label>
+                  <select
+                    value={editEntryMode}
+                    onChange={(e) => setEditEntryMode(e.target.value as any)}
+                    className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none"
+                  >
+                    <option value="group">Group Mode (Table Teams)</option>
+                    <option value="individual">Individual Mode</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 mb-1 block">Cognitive Level</label>
+                  <select
+                    value={editTargetLevel}
+                    onChange={(e) => setEditTargetLevel(e.target.value as CognitiveTargetLevel)}
+                    className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none"
+                  >
+                    <option value="foundational">Foundational</option>
+                    <option value="operational">Operational</option>
+                    <option value="advanced">Advanced</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowEditSetModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-xs font-bold bg-[#4682B4] hover:bg-[#3b6f9a] text-white rounded-lg shadow-xs flex items-center gap-1.5 transition-colors"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save Changes</span>
                 </button>
               </div>
             </form>

@@ -34,14 +34,14 @@ export default function HistoryPage() {
     loadSessions();
   }, []);
 
-  const loadSessions = () => {
-    const list = AppStore.getSessions();
+  const loadSessions = async () => {
+    const list = await AppStore.fetchSessions();
     setSessions(list);
   };
 
-  const handleOpenDetail = (sess: Session) => {
+  const handleOpenDetail = async (sess: Session) => {
     setSelectedSession(sess);
-    const p = AppStore.getParticipants(sess.id);
+    const p = await AppStore.fetchParticipants(sess.id);
     setSessionParticipants(p);
     const r = AppStore.getResponses(sess.id);
     setSessionResponses(r);
@@ -61,33 +61,55 @@ export default function HistoryPage() {
     }
   };
 
-  const handleExportCSV = (sess: Session) => {
-    const p = AppStore.getParticipants(sess.id);
+  const handleExportCSV = async (sess: Session) => {
+    const p = await AppStore.fetchParticipants(sess.id);
     const r = AppStore.getResponses(sess.id);
 
     let csvContent = 'data:text/csv;charset=utf-8,';
-    csvContent += 'Client Name,Cohort Number,Session Title,Room PIN,Entry Mode,Session Start Time,Participant Name,Question ID,Chosen Option,Is Correct,Points Awarded,Submitted Timestamp\n';
+    csvContent += 'Client Name,Cohort Number,Session Title,Room PIN,Entry Mode,Session Start Time,Participant Name,Total Score,Question ID,Chosen Option,Is Correct,Points Awarded,Submitted Timestamp\n';
 
-    r.forEach(item => {
-      const participantObj = p.find(part => part.id === item.participant_id);
-      const chosenStr = Array.isArray(item.selected_options) ? item.selected_options.join(';') : String(item.selected_options);
+    if (r.length === 0) {
+      p.forEach(part => {
+        const row = [
+          `"${sess.client_name || sess.group?.client_name || 'Client'}"`,
+          `"Cohort ${sess.cohort_number || 1}"`,
+          `"${sess.title}"`,
+          `"${sess.room_code}"`,
+          `"${sess.entry_mode}"`,
+          `"${sess.created_at}"`,
+          `"${part.display_name}"`,
+          part.score,
+          `"N/A"`,
+          `"N/A"`,
+          `"N/A"`,
+          0,
+          `"${part.joined_at}"`
+        ].join(',');
+        csvContent += row + '\n';
+      });
+    } else {
+      r.forEach(item => {
+        const participantObj = p.find(part => part.id === item.participant_id);
+        const chosenStr = Array.isArray(item.selected_options) ? item.selected_options.join(';') : String(item.selected_options);
 
-      const row = [
-        `"${sess.client_name || sess.group?.client_name || 'Client'}"`,
-        `"Cohort ${sess.cohort_number || 1}"`,
-        `"${sess.title}"`,
-        `"${sess.room_code}"`,
-        `"${sess.entry_mode}"`,
-        `"${sess.created_at}"`,
-        `"${participantObj?.display_name || 'Participant'}"`,
-        `"${item.question_id}"`,
-        `"${chosenStr}"`,
-        item.is_correct ? 'TRUE' : 'FALSE',
-        item.points_awarded,
-        `"${item.submitted_at}"`
-      ].join(',');
-      csvContent += row + '\n';
-    });
+        const row = [
+          `"${sess.client_name || sess.group?.client_name || 'Client'}"`,
+          `"Cohort ${sess.cohort_number || 1}"`,
+          `"${sess.title}"`,
+          `"${sess.room_code}"`,
+          `"${sess.entry_mode}"`,
+          `"${sess.created_at}"`,
+          `"${participantObj?.display_name || 'Participant'}"`,
+          participantObj?.score ?? 0,
+          `"${item.question_id}"`,
+          `"${chosenStr}"`,
+          item.is_correct ? 'TRUE' : 'FALSE',
+          item.points_awarded,
+          `"${item.submitted_at}"`
+        ].join(',');
+        csvContent += row + '\n';
+      });
+    }
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');

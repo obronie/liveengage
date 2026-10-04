@@ -2379,6 +2379,27 @@ export class AppStore {
     return sessions.find(s => s.room_code.toUpperCase() === normalized) || null;
   }
 
+  static async fetchSessions(): Promise<Session[]> {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('sessions')
+          .select('*, questions(*), participants(*)')
+          .order('created_at', { ascending: false });
+        if (!error && data) {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(data));
+          }
+          return data as Session[];
+        }
+      } catch (err) {
+        console.warn('Supabase fetchSessions error:', err);
+      }
+    }
+    return this.getSessions();
+  }
+
   static async saveSession(session: Session): Promise<Session> {
     const sessions = this.getSessions();
     const index = sessions.findIndex(s => s.id === session.id || s.room_code === session.room_code);
@@ -2453,6 +2474,31 @@ export class AppStore {
     } catch {
       return [];
     }
+  }
+
+  static async fetchParticipants(sessionId: string): Promise<Participant[]> {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('participants')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('score', { ascending: false });
+        if (!error && data && data.length > 0) {
+          if (typeof window !== 'undefined') {
+            const raw = localStorage.getItem(PARTICIPANTS_STORAGE_KEY);
+            const localAll: Participant[] = raw ? JSON.parse(raw) : [];
+            const nonSession = localAll.filter(p => p.session_id !== sessionId);
+            localStorage.setItem(PARTICIPANTS_STORAGE_KEY, JSON.stringify([...nonSession, ...data]));
+          }
+          return data as Participant[];
+        }
+      } catch (err) {
+        console.warn('Supabase fetchParticipants error:', err);
+      }
+    }
+    return this.getParticipants(sessionId);
   }
 
   static async joinSession(

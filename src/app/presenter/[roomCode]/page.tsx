@@ -157,21 +157,47 @@ export default function PresenterPage() {
     await AppStore.saveSession(updated);
   };
 
+  const handleToggleLeaderboard = async () => {
+    if (!session) return;
+    const next = !showLeaderboard;
+    setShowLeaderboard(next);
+    const updated: Session = {
+      ...session,
+      show_leaderboard: next,
+    };
+    setSession(updated);
+    await AppStore.saveSession(updated);
+  };
+
+  const handleCloseLeaderboard = async () => {
+    if (!session) return;
+    setShowLeaderboard(false);
+    if (session.show_leaderboard) {
+      const updated: Session = { ...session, show_leaderboard: false };
+      setSession(updated);
+      await AppStore.saveSession(updated);
+    }
+  };
+
   const handleStartFirstQuestion = async () => {
     if (!session || !session.questions || session.questions.length === 0) return;
     const firstQ = session.questions[0];
-    const duration = firstQ.duration > 0 ? firstQ.duration : 60;
+    const isUntimed = session.timing_mode === 'untimed';
+    const isOverall = session.timing_mode === 'overall';
+    const overallSec = (session.overall_time_minutes || 20) * 60;
+    const duration = isUntimed ? 0 : (isOverall ? overallSec : (firstQ.duration > 0 ? firstQ.duration : 45));
 
     const updated: Session = {
       ...session,
       status: 'question_active',
       current_question_index: 0,
-      question_timer_end: new Date(Date.now() + duration * 1000).toISOString(),
+      question_timer_end: (isUntimed || duration === 0) ? undefined : new Date(Date.now() + duration * 1000).toISOString(),
+      overall_timer_end: isOverall ? new Date(Date.now() + overallSec * 1000).toISOString() : undefined,
     };
     setSession(updated);
     setTimeLeft(duration);
     setInitialDuration(duration);
-    setIsTimerRunning(firstQ.duration > 0);
+    setIsTimerRunning(!isUntimed && duration > 0);
     setResponses([]);
     setShowRationale(true);
     await AppStore.saveSession(updated);
@@ -188,9 +214,10 @@ export default function PresenterPage() {
   const handleUnlockSubmissions = async () => {
     if (!session) return;
     const currentQ = session.questions?.[session.current_question_index];
-    const duration = currentQ?.duration || 45;
+    const isUntimed = session.timing_mode === 'untimed';
+    const duration = isUntimed ? 0 : (currentQ?.duration || 45);
     setTimeLeft(duration);
-    setIsTimerRunning(duration > 0);
+    setIsTimerRunning(!isUntimed && duration > 0);
     const updated: Session = { ...session, status: 'question_active' };
     setSession(updated);
     await AppStore.saveSession(updated);
@@ -231,6 +258,7 @@ export default function PresenterPage() {
       const updated: Session = { 
         ...session, 
         status: 'completed',
+        show_leaderboard: true,
         completed_at: session.completed_at || new Date().toISOString()
       };
       setSession(updated);
@@ -242,19 +270,32 @@ export default function PresenterPage() {
 
     const nextQ = session.questions[nextIdx];
     const isPostSessionReview = !!session.completed_at;
-    const duration = nextQ.duration > 0 ? nextQ.duration : 60;
+    const isUntimed = session.timing_mode === 'untimed';
+    const isOverall = session.timing_mode === 'overall';
+    let duration = 0;
+    if (!isUntimed && !isPostSessionReview) {
+      if (isOverall) {
+        duration = timeLeft; // keep running overall session clock
+      } else {
+        duration = nextQ.duration > 0 ? nextQ.duration : 45;
+      }
+    }
 
     const updated: Session = {
       ...session,
       current_question_index: nextIdx,
       status: isPostSessionReview ? 'question_locked' : 'question_active',
-      question_timer_end: isPostSessionReview ? undefined : new Date(Date.now() + duration * 1000).toISOString(),
+      question_timer_end: (isUntimed || isPostSessionReview || duration <= 0) 
+        ? undefined 
+        : (isOverall ? session.overall_timer_end : new Date(Date.now() + duration * 1000).toISOString()),
     };
 
     setSession(updated);
-    setTimeLeft(isPostSessionReview ? 0 : duration);
-    setInitialDuration(duration);
-    setIsTimerRunning(!isPostSessionReview && nextQ.duration > 0);
+    if (!isOverall) {
+      setTimeLeft(isPostSessionReview ? 0 : duration);
+      setInitialDuration(duration);
+      setIsTimerRunning(!isPostSessionReview && !isUntimed && duration > 0);
+    }
     setResponses(AppStore.getResponses(session.id, nextQ.id));
     setHiddenWords(AppStore.getHiddenWords(nextQ.id));
     setShowLeaderboard(false);
@@ -267,19 +308,32 @@ export default function PresenterPage() {
     const prevIdx = session.current_question_index - 1;
     const prevQ = session.questions[prevIdx];
     const isPostSessionReview = !!session.completed_at;
-    const duration = prevQ.duration > 0 ? prevQ.duration : 60;
+    const isUntimed = session.timing_mode === 'untimed';
+    const isOverall = session.timing_mode === 'overall';
+    let duration = 0;
+    if (!isUntimed && !isPostSessionReview) {
+      if (isOverall) {
+        duration = timeLeft;
+      } else {
+        duration = prevQ.duration > 0 ? prevQ.duration : 45;
+      }
+    }
 
     const updated: Session = {
       ...session,
       current_question_index: prevIdx,
       status: isPostSessionReview ? 'question_locked' : 'question_active',
-      question_timer_end: isPostSessionReview ? undefined : new Date(Date.now() + duration * 1000).toISOString(),
+      question_timer_end: (isUntimed || isPostSessionReview || duration <= 0) 
+        ? undefined 
+        : (isOverall ? session.overall_timer_end : new Date(Date.now() + duration * 1000).toISOString()),
     };
 
     setSession(updated);
-    setTimeLeft(isPostSessionReview ? 0 : duration);
-    setInitialDuration(duration);
-    setIsTimerRunning(!isPostSessionReview && prevQ.duration > 0);
+    if (!isOverall) {
+      setTimeLeft(isPostSessionReview ? 0 : duration);
+      setInitialDuration(duration);
+      setIsTimerRunning(!isPostSessionReview && !isUntimed && duration > 0);
+    }
     setResponses(AppStore.getResponses(session.id, prevQ.id));
     setHiddenWords(AppStore.getHiddenWords(prevQ.id));
     setShowLeaderboard(false);
@@ -340,7 +394,7 @@ export default function PresenterPage() {
       }
 
       if (e.key === 'Escape') {
-        setShowLeaderboard(false);
+        handleCloseLeaderboard();
         setShowAnsweredDropdown(false);
         return;
       }
@@ -378,7 +432,7 @@ export default function PresenterPage() {
         }
       } else if (e.key === 's' || e.key === 'S') {
         e.preventDefault();
-        setShowLeaderboard(prev => !prev);
+        handleToggleLeaderboard();
       }
     };
 
@@ -701,9 +755,17 @@ export default function PresenterPage() {
                   >
                     <Clock className="w-6 h-6 animate-pulse" />
                     <span>
-                      {Math.floor(timeLeft / 60).toString().padStart(2, '0')}:
-                      {(timeLeft % 60).toString().padStart(2, '0')}
+                      {session.timing_mode === 'untimed' ? (
+                        'Untimed'
+                      ) : (
+                        `${Math.floor(timeLeft / 60).toString().padStart(2, '0')}:${(timeLeft % 60).toString().padStart(2, '0')}`
+                      )}
                     </span>
+                    {session.timing_mode === 'overall' && (
+                      <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-sky-300 bg-sky-950/80 px-2 py-0.5 rounded-lg border border-sky-500/40">
+                        Overall
+                      </span>
+                    )}
                   </div>
 
                   {session.status === 'question_locked' && (
@@ -994,7 +1056,7 @@ export default function PresenterPage() {
 
                 {/* Scores Standings */}
                 <button
-                  onClick={() => setShowLeaderboard(!showLeaderboard)}
+                  onClick={handleToggleLeaderboard}
                   className="px-3.5 py-2 rounded-xl bg-[#121b2d] hover:bg-slate-800 text-amber-400 font-semibold text-xs border border-[#1e2e4a] flex items-center gap-1.5 transition-colors"
                 >
                   <Trophy className="w-4 h-4 text-amber-400" />
@@ -1053,7 +1115,7 @@ export default function PresenterPage() {
                 <span>Review from Beginning (Q1)</span>
               </button>
               <button
-                onClick={() => setShowLeaderboard(true)}
+                onClick={handleToggleLeaderboard}
                 className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold text-sm transition-colors flex items-center gap-2 shadow-lg"
               >
                 <Trophy className="w-4 h-4" />
@@ -1080,7 +1142,7 @@ export default function PresenterPage() {
                 <h3 className="text-xl font-black text-white">Leaderboard Standings</h3>
               </div>
               <button
-                onClick={() => setShowLeaderboard(false)}
+                onClick={handleCloseLeaderboard}
                 className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
               >
                 Close [Esc]
