@@ -108,6 +108,8 @@ export default function CoursesPage() {
 
   // Document upload state
   const [isUploading, setIsUploading] = useState(false);
+  const [isDraggingCurriculum, setIsDraggingCurriculum] = useState(false);
+  const [isDraggingEisa, setIsDraggingEisa] = useState(false);
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
   const curriculumInputRef = useRef<HTMLInputElement>(null);
   const eisaInputRef = useRef<HTMLInputElement>(null);
@@ -234,8 +236,7 @@ Provide the table directly in clean Markdown format.`;
   };
 
   // --- Document Upload Handlers (Curriculum vs EISA Specs) ---
-  const handleUploadDocument = async (e: React.ChangeEvent<HTMLInputElement>, docType: 'curriculum' | 'eisa_specification') => {
-    const file = e.target.files?.[0];
+  const processUploadedFile = async (file: File, docType: 'curriculum' | 'eisa_specification') => {
     if (!file || !selectedCourse) return;
 
     setIsUploading(true);
@@ -272,8 +273,15 @@ Provide the table directly in clean Markdown format.`;
       setUploadFeedback('Upload failed: ' + err.message);
     } finally {
       setIsUploading(false);
-      if (e.target) e.target.value = '';
     }
+  };
+
+  const handleUploadDocument = async (e: React.ChangeEvent<HTMLInputElement>, docType: 'curriculum' | 'eisa_specification') => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await processUploadedFile(file, docType);
+    }
+    if (e.target) e.target.value = '';
   };
 
   // --- Copy Gemini Notebook Prompt (Learner Guide + EISA Exam Criteria) ---
@@ -618,16 +626,28 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                 type="file"
                 ref={curriculumInputRef}
                 onChange={(e) => handleUploadDocument(e, 'curriculum')}
-                accept=".pdf,.docx,.doc,.txt"
+                accept=".pdf,.docx,.doc,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 className="hidden"
               />
               <button
                 type="button"
                 onClick={() => curriculumInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingCurriculum(true); }}
+                onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingCurriculum(true); }}
+                onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingCurriculum(false); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingCurriculum(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) processUploadedFile(file, 'curriculum');
+                }}
                 disabled={isUploading}
-                title={docStatus.hasCurriculum ? 'Curriculum document is loaded. Click to replace.' : 'Click to upload curriculum framework'}
+                title={docStatus.hasCurriculum ? 'Curriculum document loaded. Click or drag & drop to replace.' : 'Click to select or drag & drop PDF/Word curriculum framework'}
                 className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all ${
-                  docStatus.hasCurriculum
+                  isDraggingCurriculum
+                    ? 'ring-2 ring-[#6DC082] bg-[#6DC082]/30 border-[#6DC082] scale-105 shadow-md'
+                    : docStatus.hasCurriculum
                     ? 'bg-[#6DC082]/15 border-[#6DC082] text-[#2b773f] hover:bg-[#6DC082]/25'
                     : 'bg-slate-50 hover:bg-slate-100 border-dashed border-slate-300 text-slate-600'
                 }`}
@@ -640,7 +660,7 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                 ) : (
                   <>
                     <Upload className="w-3.5 h-3.5 text-slate-400" />
-                    <span>+ Curriculum</span>
+                    <span>+ Curriculum {isDraggingCurriculum ? '(Drop here!)' : ''}</span>
                   </>
                 )}
               </button>
@@ -650,16 +670,28 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                 type="file"
                 ref={eisaInputRef}
                 onChange={(e) => handleUploadDocument(e, 'eisa_specification')}
-                accept=".pdf,.docx,.doc,.txt"
+                accept=".pdf,.docx,.doc,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 className="hidden"
               />
               <button
                 type="button"
                 onClick={() => eisaInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingEisa(true); }}
+                onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingEisa(true); }}
+                onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingEisa(false); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingEisa(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) processUploadedFile(file, 'eisa_specification');
+                }}
                 disabled={isUploading}
-                title={docStatus.hasEisa ? 'EISA external assessment specification is loaded. Click to replace.' : 'Click to upload EISA specification document'}
+                title={docStatus.hasEisa ? 'EISA external assessment specification loaded. Click or drag & drop to replace.' : 'Click to select or drag & drop PDF/Word EISA specification'}
                 className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all ${
-                  docStatus.hasEisa
+                  isDraggingEisa
+                    ? 'ring-2 ring-[#4682B4] bg-[#4682B4]/30 border-[#4682B4] scale-105 shadow-md'
+                    : docStatus.hasEisa
                     ? 'bg-[#4682B4]/15 border-[#4682B4] text-[#1e3a5f] hover:bg-[#4682B4]/25'
                     : 'bg-slate-50 hover:bg-slate-100 border-dashed border-slate-300 text-slate-600'
                 }`}
@@ -672,7 +704,7 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                 ) : (
                   <>
                     <Upload className="w-3.5 h-3.5 text-slate-400" />
-                    <span>+ EISA Specs</span>
+                    <span>+ EISA Specs {isDraggingEisa ? '(Drop here!)' : ''}</span>
                   </>
                 )}
               </button>

@@ -408,20 +408,25 @@ export default function PresenterPage() {
       }
 
       if (session?.status === 'lobby') {
-        if (e.key === ' ' || e.key === 'Enter') {
+        if (e.key === ' ' || e.key === 'Enter' || e.key === 'F5' || e.key === 'PageDown' || e.key === 'ArrowRight') {
           e.preventDefault();
           handleStartFirstQuestion();
         }
         return;
       }
 
-      if (e.key === 'n' || e.key === 'N' || e.key === 'ArrowRight') {
+      // Next Question: 'n', ArrowRight, or clicker Forward (PageDown)
+      if (e.key === 'n' || e.key === 'N' || e.key === 'ArrowRight' || e.key === 'PageDown') {
         e.preventDefault();
         handleNextQuestion();
-      } else if (e.key === 'p' || e.key === 'P' || e.key === 'ArrowLeft') {
+      } 
+      // Previous Question: 'p', ArrowLeft, or clicker Backward (PageUp)
+      else if (e.key === 'p' || e.key === 'P' || e.key === 'ArrowLeft' || e.key === 'PageUp') {
         e.preventDefault();
         handlePrevQuestion();
-      } else if (e.key === 'r' || e.key === 'R') {
+      } 
+      // Reveal Results: 'r', or clicker Blank/Black button ('b' or '.')
+      else if (e.key === 'r' || e.key === 'R' || e.key === 'b' || e.key === 'B' || e.key === '.') {
         e.preventDefault();
         if (session?.status !== 'revealed') {
           handleRevealAnswers();
