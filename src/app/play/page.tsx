@@ -252,18 +252,34 @@ function ParticipantPlayContent() {
     }
   }, [session?.show_leaderboard, session?.id, participant?.id, hasFiredFireworks]);
 
-  // Synchronized countdown timer based on server question_timer_end
+  // Synchronized countdown timer based on server question_timer_end or overall_timer_end
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (session?.status === 'question_active' && session.question_timer_end) {
-      interval = setInterval(() => {
-        const diffMs = new Date(session.question_timer_end!).getTime() - Date.now();
-        const secondsRemaining = Math.max(0, Math.ceil(diffMs / 1000));
-        setTimeLeft(secondsRemaining);
-      }, 1000);
+    if (session?.status === 'question_active') {
+      if (session.timing_mode === 'untimed') {
+        setTimeLeft(0);
+      } else {
+        const timerTarget = session.timing_mode === 'overall'
+          ? (session.overall_timer_end || session.question_timer_end)
+          : session.question_timer_end;
+
+        if (timerTarget) {
+          const update = () => {
+            const diffMs = new Date(timerTarget).getTime() - Date.now();
+            const secondsRemaining = Math.max(0, Math.ceil(diffMs / 1000));
+            setTimeLeft(secondsRemaining);
+          };
+          update();
+          interval = setInterval(update, 1000);
+        } else {
+          setTimeLeft(0);
+        }
+      }
     }
-    return () => clearInterval(interval);
-  }, [session?.status, session?.question_timer_end]);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [session?.status, session?.question_timer_end, session?.overall_timer_end, session?.timing_mode]);
 
   const activeQIndex = session?.current_question_index ?? 0;
   const currentQ = session?.questions?.[activeQIndex];
@@ -325,6 +341,65 @@ function ParticipantPlayContent() {
       elapsed
     );
     setCurrentResponse(resp);
+  };
+
+  // Cloze Gap Assignment: selectedChoices stores option indices for each gap in order: [gap1OptIdx, gap2OptIdx, ...]
+  const handleAssignClozeWord = async (optIdx: number, targetGapIndex?: number) => {
+    if (!session || !currentQ || !participant) return;
+    if (session.status === 'question_locked' || session.status === 'revealed' || session.status === 'completed') {
+      return;
+    }
+
+    const gapsCount = (currentQ.body.match(/\[(\d+)\]/g) || []).length || currentQ.correct_options.length || 3;
+    let next: number[] = [...selectedChoices];
+    while (next.length < gapsCount) next.push(-1);
+
+    if (targetGapIndex !== undefined && targetGapIndex >= 0 && targetGapIndex < gapsCount) {
+      next[targetGapIndex] = optIdx;
+    } else {
+      const emptyIdx = next.findIndex(val => val === -1 || val === undefined);
+      if (emptyIdx !== -1) {
+        next[emptyIdx] = optIdx;
+      } else {
+        next[next.length - 1] = optIdx;
+      }
+    }
+
+    setSelectedChoices(next);
+    setJustSubmittedFeedback(true);
+
+    const elapsed = currentQ.duration > 0 ? Math.max(0, currentQ.duration - timeLeft) : 0;
+    const resp = await AppStore.submitResponse(
+      session,
+      currentQ,
+      participant,
+      next,
+      elapsed
+    );
+    setCurrentResponse(resp);
+  };
+
+  const handleClearClozeGap = async (gapIdx: number) => {
+    if (!session || !currentQ || !participant) return;
+    if (session.status === 'question_locked' || session.status === 'revealed' || session.status === 'completed') {
+      return;
+    }
+
+    let next = [...selectedChoices];
+    if (gapIdx < next.length) {
+      next[gapIdx] = -1;
+      setSelectedChoices(next);
+
+      const elapsed = currentQ.duration > 0 ? Math.max(0, currentQ.duration - timeLeft) : 0;
+      const resp = await AppStore.submitResponse(
+        session,
+        currentQ,
+        participant,
+        next,
+        elapsed
+      );
+      setCurrentResponse(resp);
+    }
   };
 
   const handleWordSubmit = async (e: React.FormEvent) => {
@@ -556,20 +631,35 @@ function ParticipantPlayContent() {
               </div>
             )}
 
-            {/* Question Stem */}
+            {/* Question Stem & Live Timer Indicator */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
                 <span>Question {activeQIndex + 1} of {session.questions?.length}</span>
-                <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold text-[10px]">
-                  {currentQ.format}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  {session.timing_mode === 'untimed' ? (
+                    <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center gap-1">
+                      <span>♾️ Untimed</span>
+                    </span>
+                  ) : (
+                    <span className={`px-2 py-0.5 rounded font-mono font-bold text-[10px] flex items-center gap-1 ${
+                      timeLeft <= 10 && timeLeft > 0 ? 'bg-red-100 text-red-700 animate-pulse' : 'bg-[#4682B4]/15 text-[#4682B4]'
+                    }`}>
+                      <Clock className="w-3 h-3" />
+                      <span>{Math.floor(timeLeft / 60).toString().padStart(2, '0')}:{(timeLeft % 60).toString().padStart(2, '0')}</span>
+                      {session.timing_mode === 'overall' && <span className="text-[9px] uppercase font-sans">Total</span>}
+                    </span>
+                  )}
+                  <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold text-[10px]">
+                    {currentQ.format}
+                  </span>
+                </div>
               </div>
               <h2 className="text-base sm:text-lg font-bold text-slate-800 leading-snug">
                 {currentQ.body}
               </h2>
             </div>
 
-            {/* Options Choices / Word Cloud Input with Particify Tactile Buttons */}
+            {/* Options Choices / Cloze / Word Cloud Input with Particify Tactile Buttons */}
             <div className="my-auto space-y-2.5">
               {currentQ.format === 'WORD_CLOUD' ? (
                 <form onSubmit={handleWordSubmit} className="space-y-3">
@@ -588,6 +678,77 @@ function ParticipantPlayContent() {
                     <span>Submit to Word Cloud</span>
                   </button>
                 </form>
+              ) : currentQ.format === 'CLOZE' ? (
+                /* Interactive Cloze Answering on Mobile */
+                <div className="space-y-3">
+                  {/* Gap Slots */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                      Tap a Word from the Bank below to fill each Gap:
+                    </span>
+                    {(currentQ.body.match(/\[(\d+)\]/g) || ['[1]', '[2]', '[3]']).map((_, gapIdx) => {
+                      const gapNum = gapIdx + 1;
+                      const assignedOptIdx = selectedChoices[gapIdx];
+                      const hasWord = assignedOptIdx !== undefined && assignedOptIdx !== -1 && currentQ.options[assignedOptIdx];
+
+                      return (
+                        <div
+                          key={gapIdx}
+                          className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${
+                            hasWord ? 'bg-emerald-50/70 border-emerald-300' : 'bg-white border-slate-200'
+                          }`}
+                        >
+                          <span className="text-xs font-bold text-[#1e3a5f]">
+                            Gap [{gapNum}]:
+                          </span>
+                          {hasWord ? (
+                            <button
+                              type="button"
+                              onClick={() => handleClearClozeGap(gapIdx)}
+                              disabled={session.status === 'question_locked'}
+                              className="flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-red-50 text-emerald-900 border border-emerald-400 rounded-lg text-xs font-bold shadow-2xs transition-colors"
+                              title="Tap to remove word from this gap"
+                            >
+                              <span>{currentQ.options[assignedOptIdx]}</span>
+                              <span className="text-slate-400 hover:text-red-500 text-xs ml-1">✕</span>
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-400 italic">
+                              (Tap a word below)
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Word Bank Chips */}
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2 shadow-xs">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-600 block">
+                      Word Bank:
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {currentQ.options.map((opt, optIdx) => {
+                        const isUsed = selectedChoices.includes(optIdx);
+                        return (
+                          <button
+                            key={optIdx}
+                            type="button"
+                            onClick={() => handleAssignClozeWord(optIdx)}
+                            disabled={session.status === 'question_locked' || isUsed}
+                            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
+                              isUsed
+                                ? 'bg-slate-100 text-slate-400 border-slate-200 opacity-50 cursor-not-allowed'
+                                : 'bg-white hover:bg-[#4682B4] hover:text-white border-slate-300 text-slate-800 shadow-xs active:scale-95'
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               ) : (
                 <div className="space-y-2.5">
                   {currentQ.options.map((opt, idx) => {
@@ -750,8 +911,56 @@ function ParticipantPlayContent() {
                     </div>
                   )}
 
-                  {/* Correct Option Highlighting */}
-                  {displayQ.format !== 'WORD_CLOUD' && (
+                  {/* Correct Option / Cloze Gap Highlighting */}
+                  {displayQ.format === 'CLOZE' ? (
+                    <div className="space-y-2">
+                      <span className="text-xs font-bold text-slate-600 uppercase tracking-wider block">
+                        Gap Evaluation:
+                      </span>
+                      {(displayQ.body.match(/\[(\d+)\]/g) || ['[1]', '[2]', '[3]']).map((_, gapIdx) => {
+                        const gapNum = gapIdx + 1;
+                        const expectedOptIdx = displayQ.correct_options[gapIdx];
+                        const expectedWord = displayQ.options[expectedOptIdx];
+                        const userOptIdx = displaySelected[gapIdx];
+                        const userWord = userOptIdx !== undefined && userOptIdx !== -1 ? displayQ.options[userOptIdx] : null;
+                        const isGapCorrect = userOptIdx === expectedOptIdx;
+
+                        return (
+                          <div
+                            key={gapIdx}
+                            className={`p-3 rounded-xl border text-xs flex items-center justify-between ${
+                              isGapCorrect
+                                ? 'border-[#6DC082] bg-[#6DC082]/10 text-slate-900 font-bold'
+                                : 'border-red-200 bg-red-50 text-red-800'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className={`w-6 h-6 rounded-lg font-bold flex items-center justify-center text-xs ${
+                                isGapCorrect ? 'bg-[#6DC082] text-white' : 'bg-red-500 text-white'
+                              }`}>
+                                {gapNum}
+                              </span>
+                              <span>
+                                {isGapCorrect ? (
+                                  <span>{expectedWord}</span>
+                                ) : (
+                                  <span>
+                                    <span className="line-through text-red-600 mr-2">{userWord || '(No word chosen)'}</span>
+                                    <span className="font-bold text-[#2e7d32]">→ {expectedWord}</span>
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              isGapCorrect ? 'bg-[#6DC082]/20 text-[#2e7d32]' : 'bg-red-100 text-red-700'
+                            }`}>
+                              {isGapCorrect ? 'Correct ✓' : 'Expected ✗'}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : displayQ.format !== 'WORD_CLOUD' ? (
                     <div className="space-y-2">
                       <span className="text-xs font-bold text-slate-600 uppercase tracking-wider block">
                         Answer Breakdown:
@@ -794,7 +1003,7 @@ function ParticipantPlayContent() {
                         );
                       })}
                     </div>
-                  )}
+                  ) : null}
 
                   {/* Learner Guide Workplace Rationale Card */}
                   {displayQ.additional_text && (

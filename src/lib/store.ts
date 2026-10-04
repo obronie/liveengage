@@ -2437,6 +2437,12 @@ export class AppStore {
 
         if (!error && data) {
           if (data.questions) {
+            data.questions.forEach((q: any) => {
+              if (q.guide_topic_hint?.startsWith('CLOZE::')) {
+                q.format = 'CLOZE';
+                q.guide_topic_hint = q.guide_topic_hint.replace(/^CLOZE::/, '');
+              }
+            });
             data.questions.sort((a: Question, b: Question) => a.question_order - b.question_order);
           }
           const merged: Session = {
@@ -2538,18 +2544,21 @@ export class AppStore {
 
         if (session.questions && session.questions.length > 0) {
           for (const q of session.questions) {
+            const dbFormat = q.format === 'CLOZE' ? 'MULTIPLE' : q.format;
+            const dbHint = q.format === 'CLOZE' ? `CLOZE::${q.guide_topic_hint || ''}` : q.guide_topic_hint;
+
             await supabase.from('questions').upsert({
               id: q.id,
               session_id: session.id,
               question_order: q.question_order,
-              format: q.format,
+              format: dbFormat,
               body: q.body,
               additional_text: q.additional_text,
               options: q.options,
               correct_options: q.correct_options,
               duration: q.duration,
               marks: q.marks || 1,
-              guide_topic_hint: q.guide_topic_hint,
+              guide_topic_hint: dbHint,
             });
           }
         }
@@ -2680,6 +2689,24 @@ export class AppStore {
     if (question.format === 'WORD_CLOUD') {
       isCorrect = null;
       pointsAwarded = 0;
+    } else if (question.format === 'CLOZE') {
+      const selected = Array.isArray(selectedOptions) ? selectedOptions : [];
+      const correct = question.correct_options || [];
+
+      let matchCount = 0;
+      correct.forEach((corrIdx, slotIdx) => {
+        if (selected[slotIdx] === corrIdx) {
+          matchCount++;
+        }
+      });
+
+      isCorrect = matchCount === correct.length && correct.length > 0;
+      if (isCorrect) {
+        pointsAwarded = 100;
+      } else if (matchCount > 0 && correct.length > 0) {
+        // Proportionate points for partially correct gaps
+        pointsAwarded = Math.round((matchCount / correct.length) * 100);
+      }
     } else {
       const selected = Array.isArray(selectedOptions) ? selectedOptions : [];
       const correct = question.correct_options || [];

@@ -74,9 +74,37 @@ export default function PresenterPage() {
           setHiddenWords(hw);
 
           if (sess.status === 'question_active') {
-            setTimeLeft(currentQ.duration > 0 ? currentQ.duration : 60);
-            setInitialDuration(currentQ.duration > 0 ? currentQ.duration : 60);
-            setIsTimerRunning(currentQ.duration > 0);
+            if (sess.timing_mode === 'untimed') {
+              setTimeLeft(0);
+              setInitialDuration(0);
+              setIsTimerRunning(false);
+            } else if (sess.timing_mode === 'overall') {
+              const totalSec = (sess.overall_time_minutes || 20) * 60;
+              if (sess.overall_timer_end) {
+                const rem = Math.max(0, Math.ceil((new Date(sess.overall_timer_end).getTime() - Date.now()) / 1000));
+                setTimeLeft(rem);
+                setInitialDuration(totalSec);
+                setIsTimerRunning(rem > 0);
+              } else {
+                setTimeLeft(totalSec);
+                setInitialDuration(totalSec);
+                setIsTimerRunning(true);
+              }
+            } else {
+              const dur = currentQ.duration > 0 ? currentQ.duration : 45;
+              if (sess.question_timer_end) {
+                const rem = Math.max(0, Math.ceil((new Date(sess.question_timer_end).getTime() - Date.now()) / 1000));
+                setTimeLeft(rem);
+                setInitialDuration(dur);
+                setIsTimerRunning(rem > 0);
+              } else {
+                setTimeLeft(dur);
+                setInitialDuration(dur);
+                setIsTimerRunning(dur > 0);
+              }
+            }
+          } else if (sess.status === 'question_locked' || sess.status === 'revealed') {
+            setIsTimerRunning(false);
           }
         }
       }
@@ -215,10 +243,39 @@ export default function PresenterPage() {
     if (!session) return;
     const currentQ = session.questions?.[session.current_question_index];
     const isUntimed = session.timing_mode === 'untimed';
-    const duration = isUntimed ? 0 : (currentQ?.duration || 45);
-    setTimeLeft(duration);
-    setIsTimerRunning(!isUntimed && duration > 0);
-    const updated: Session = { ...session, status: 'question_active' };
+    const isOverall = session.timing_mode === 'overall';
+
+    let duration = 0;
+    let timerEnd: string | undefined = undefined;
+
+    if (isUntimed) {
+      duration = 0;
+      setTimeLeft(0);
+      setIsTimerRunning(false);
+    } else if (isOverall) {
+      if (session.overall_timer_end) {
+        duration = Math.max(0, Math.ceil((new Date(session.overall_timer_end).getTime() - Date.now()) / 1000));
+        timerEnd = session.overall_timer_end;
+      } else {
+        duration = (session.overall_time_minutes || 20) * 60;
+        timerEnd = new Date(Date.now() + duration * 1000).toISOString();
+      }
+      setTimeLeft(duration);
+      setIsTimerRunning(duration > 0);
+    } else {
+      duration = currentQ?.duration || 45;
+      timerEnd = new Date(Date.now() + duration * 1000).toISOString();
+      setTimeLeft(duration);
+      setInitialDuration(duration);
+      setIsTimerRunning(duration > 0);
+    }
+
+    const updated: Session = {
+      ...session,
+      status: 'question_active',
+      question_timer_end: timerEnd,
+      overall_timer_end: isOverall ? timerEnd : session.overall_timer_end,
+    };
     setSession(updated);
     await AppStore.saveSession(updated);
   };
@@ -227,6 +284,17 @@ export default function PresenterPage() {
     setTimeLeft((prev) => prev + seconds);
     setInitialDuration((prev) => prev + seconds);
     if (!isTimerRunning) setIsTimerRunning(true);
+    if (session) {
+      const isOverall = session.timing_mode === 'overall';
+      const newEnd = new Date(Date.now() + (timeLeft + seconds) * 1000).toISOString();
+      const updated: Session = {
+        ...session,
+        question_timer_end: newEnd,
+        overall_timer_end: isOverall ? newEnd : session.overall_timer_end,
+      };
+      setSession(updated);
+      AppStore.saveSession(updated);
+    }
   };
 
   const handleRevealAnswers = async () => {
@@ -738,6 +806,7 @@ export default function PresenterPage() {
                     {currentQuestion.format === 'MCQ' && 'Single Choice'}
                     {currentQuestion.format === 'MULTIPLE' && 'Multiple Choice (Select all)'}
                     {currentQuestion.format === 'BINARY' && 'True / False'}
+                    {currentQuestion.format === 'CLOZE' && 'Fill in the Gap (Cloze)'}
                     {currentQuestion.format === 'SCALE' && 'Scale 1-5'}
                     {currentQuestion.format === 'WORD_CLOUD' && 'Word Cloud Response'}
                   </span>
@@ -764,6 +833,11 @@ export default function PresenterPage() {
                     {session.timing_mode === 'overall' && (
                       <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-sky-300 bg-sky-950/80 px-2 py-0.5 rounded-lg border border-sky-500/40">
                         Overall
+                      </span>
+                    )}
+                    {session.timing_mode === 'untimed' && (
+                      <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-slate-400 bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-700">
+                        Manual Pace
                       </span>
                     )}
                   </div>
@@ -813,7 +887,7 @@ export default function PresenterPage() {
               )}
             </div>
 
-            {/* Answer Display Area: Structured Choices or Word Cloud */}
+            {/* Answer Display Area: Structured Choices, Cloze, or Word Cloud */}
             <div className="my-auto py-6">
               {currentQuestion.format === 'WORD_CLOUD' ? (
                 /* Dynamic Word Cloud View with 1-Click Moderation */
@@ -851,6 +925,71 @@ export default function PresenterPage() {
                       })}
                     </div>
                   )}
+                </div>
+              ) : currentQuestion.format === 'CLOZE' ? (
+                /* Interactive Cloze Projector View with Word Bank & Gaps */
+                <div className="p-8 rounded-3xl bg-[#121b2d] border border-[#1e2e4a] space-y-6">
+                  {/* Top Word Bank Chips */}
+                  <div>
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
+                      <Sparkles className="w-4 h-4 text-[#6DC082]" />
+                      <span>Classroom Word Bank (Missing Terms):</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      {currentQuestion.options.map((word, wIdx) => (
+                        <span
+                          key={wIdx}
+                          className="px-4 py-2 rounded-xl bg-[#0a0f1d] border border-[#1e2e4a] text-sm sm:text-base font-bold text-slate-200 shadow-sm"
+                        >
+                          {word}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Passage with Gaps or Revealed Words */}
+                  <div className="p-6 rounded-2xl bg-[#0a0f1d] border border-[#1e2e4a] space-y-4">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#4682B4] block">
+                      Passage with Missing Workplace Terms:
+                    </span>
+                    <div className="text-lg sm:text-2xl font-medium text-slate-200 leading-relaxed">
+                      {(() => {
+                        const parts = currentQuestion.body.split(/(\[\d+\])/g);
+                        return parts.map((part, pIdx) => {
+                          const match = part.match(/^\[(\d+)\]$/);
+                          if (!match) return <span key={pIdx}>{part}</span>;
+                          const gapNum = parseInt(match[1], 10);
+                          const gapIndex = gapNum - 1;
+                          const isRevealed = session.status === 'revealed';
+                          const correctWord = currentQuestion.options[currentQuestion.correct_options[gapIndex]];
+
+                          if (isRevealed && correctWord) {
+                            return (
+                              <span
+                                key={pIdx}
+                                className="inline-flex items-center gap-1.5 px-3 py-1 mx-1.5 rounded-xl bg-emerald-950/80 border-2 border-emerald-500 text-emerald-300 font-bold shadow-[0_0_15px_rgba(16,185,129,0.3)] animate-in zoom-in-95 duration-200"
+                              >
+                                <span className="w-5 h-5 rounded-md bg-emerald-600 text-white font-mono text-xs flex items-center justify-center">
+                                  {gapNum}
+                                </span>
+                                <span>{correctWord}</span>
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <span
+                              key={pIdx}
+                              className="inline-flex items-center gap-1 px-3 py-1 mx-1.5 rounded-xl bg-slate-900 border-2 border-dashed border-[#4682B4]/60 text-[#4682B4] font-mono text-base font-bold"
+                            >
+                              <span>[{gapNum}]</span>
+                              <span className="opacity-40">____________</span>
+                            </span>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
                 </div>
               ) : (
                 /* Structured Options Cards & Bar Chart Distribution in LearnBlended Styling */

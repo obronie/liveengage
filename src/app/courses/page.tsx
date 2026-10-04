@@ -615,6 +615,33 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
     AppStore.saveQuestionSet(updatedSet);
   };
 
+  const handleAddClozeQuestion = () => {
+    if (!selectedSet) return;
+    const newQ: Question = {
+      id: 'q-' + Math.random().toString(36).substring(2, 9),
+      question_order: selectedSet.questions.length + 1,
+      format: 'CLOZE',
+      body: 'When offloading freight at the receiving dock, the store person must first check the [1] against the delivery vehicle load sheet. Any damaged stock must be moved to the [2] area, and the driver must sign the [3] before leaving the warehouse.',
+      additional_text: `🟢 Model Answer:
+[1] Seal Number
+[2] Quality Hold
+[3] Delivery Note
+
+📝 How the Assessor Marks This:
+Award 1 mark for each correctly selected term from the Word Bank (3 marks total).`,
+      options: ['Seal Number', 'Quality Hold', 'Delivery Note', 'Pick Face', 'Hazardous Stacking'],
+      correct_options: [0, 1, 2],
+      duration: selectedSet.timing_mode === 'per_question' ? (selectedSet.per_question_duration || 60) : 0,
+      marks: 3,
+      guide_topic_hint: 'Receiving Dock SOPs',
+    };
+    const questions = [...selectedSet.questions, newQ];
+    const total_marks = questions.reduce((sum, q) => sum + (q.marks || 1), 0);
+    const updatedSet = { ...selectedSet, questions, total_marks };
+    setSelectedSet(updatedSet);
+    AppStore.saveQuestionSet(updatedSet);
+  };
+
   const handleDeleteQuestion = (qIndex: number) => {
     if (!selectedSet) return;
     const questions = selectedSet.questions.filter((_, idx) => idx !== qIndex).map((q, i) => ({ ...q, question_order: i + 1 }));
@@ -629,6 +656,9 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
     if (!selectedSet || !selectedCourse || !selectedCluster) return;
 
     const roomCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const effectiveTimingMode = selectedSet.timing_mode || (selectedSet.time_allowed_minutes && !selectedSet.questions?.some(q => q.duration > 0) ? 'overall' : 'per_question');
+    const effectiveOverallTime = selectedSet.overall_time_minutes || selectedSet.time_allowed_minutes || 20;
+
     const newSession: Session = {
       id: 'sess-' + Math.random().toString(36).substring(2, 9),
       course_id: selectedCourse.id,
@@ -639,8 +669,8 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
       client_name: selectedSet.client_name || 'Generic Standard',
       cohort_number: 1,
       entry_mode: selectedSet.default_entry_mode || 'group',
-      timing_mode: selectedSet.timing_mode || 'per_question',
-      overall_time_minutes: selectedSet.overall_time_minutes || 20,
+      timing_mode: effectiveTimingMode,
+      overall_time_minutes: effectiveOverallTime,
       per_question_duration: selectedSet.per_question_duration || 45,
       status: 'lobby',
       current_question_index: 0,
@@ -1397,13 +1427,24 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                         Total: {selectedSet.questions.reduce((sum, q) => sum + (q.marks || 1), 0)} Marks
                       </span>
                     </div>
-                    <button
-                      onClick={handleAddQuestion}
-                      className="text-xs font-semibold text-[#4682B4] hover:underline flex items-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add Blank Question</span>
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={handleAddQuestion}
+                        className="text-xs font-semibold text-[#4682B4] hover:underline flex items-center gap-1"
+                        title="Add a standard Multiple Choice / Single Choice Question"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add MCQ Question</span>
+                      </button>
+                      <button
+                        onClick={handleAddClozeQuestion}
+                        className="text-xs font-semibold text-emerald-700 hover:underline flex items-center gap-1"
+                        title="Add a Fill in the Gap (Cloze with Word Bank) Question"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Fill in Gap (Cloze)</span>
+                      </button>
+                    </div>
                   </div>
 
                   {selectedSet.questions.map((q, qIndex) => {
@@ -1419,13 +1460,21 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                             <span className="w-6 h-6 rounded-full bg-[#4682B4] text-white text-xs font-bold flex items-center justify-center">
                               {qIndex + 1}
                             </span>
-                            <span className="text-[11px] font-bold text-[#1e3a5f] bg-[#4682B4]/15 px-2.5 py-0.5 rounded-md border border-[#4682B4]/25">
-                              {q.format === 'MCQ' && 'Single Choice (MCQ)'}
-                              {q.format === 'MULTIPLE' && 'Multiple Choice'}
-                              {q.format === 'BINARY' && 'True / False'}
-                              {q.format === 'SCALE' && 'Scale 1–5'}
-                              {q.format === 'WORD_CLOUD' && 'Word Cloud'}
-                            </span>
+                            <select
+                              value={q.format}
+                              onChange={(e) => {
+                                const newFormat = e.target.value as QuestionFormat;
+                                handleUpdateQuestion(qIndex, { format: newFormat });
+                              }}
+                              className="text-[11px] font-bold text-[#1e3a5f] bg-[#4682B4]/15 px-2 py-0.5 rounded-md border border-[#4682B4]/25 focus:outline-none cursor-pointer"
+                            >
+                              <option value="MCQ">Single Choice (MCQ)</option>
+                              <option value="MULTIPLE">Multiple Choice</option>
+                              <option value="BINARY">True / False</option>
+                              <option value="CLOZE">Fill in the Gap (Cloze)</option>
+                              <option value="SCALE">Scale 1–5</option>
+                              <option value="WORD_CLOUD">Word Cloud</option>
+                            </select>
                           </div>
 
                           <div className="flex items-center gap-2">
@@ -1477,12 +1526,107 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                             onChange={(e) => handleUpdateQuestion(qIndex, { body: e.target.value })}
                             rows={2}
                             className="w-full text-xs font-medium text-slate-800 bg-white border border-slate-200 rounded-lg p-2 focus:outline-none focus:border-[#4682B4]"
-                            placeholder="Question stem (prompts learner guide search without page numbers or authentic EISA workplace scenario)..."
+                            placeholder={q.format === 'CLOZE' ? "Use [1], [2], [3] in your passage text for gaps..." : "Question stem (prompts learner guide search without page numbers or authentic EISA workplace scenario)..."}
                           />
                         </div>
 
-                        {/* Options with Particify Tile Badges (A, B, C, D) in LearnBlended palette */}
-                        {q.format !== 'WORD_CLOUD' && (
+                        {/* CLOZE WORD BANK & GAP MAPPING */}
+                        {q.format === 'CLOZE' && (
+                          <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-[#1e3a5f] flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 text-[#6DC082]" />
+                                Word Bank &amp; Gap Alignment
+                              </span>
+                              <span className="text-[10px] text-slate-500">
+                                Place [1], [2], [3] in passage above
+                              </span>
+                            </div>
+
+                            {/* Word Bank terms */}
+                            <div className="space-y-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                                Word Bank Terms:
+                              </span>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {q.options.map((opt, optIndex) => (
+                                  <div key={optIndex} className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded border border-slate-200">
+                                    <span className="text-[10px] font-bold text-slate-500 w-5 text-center">#{optIndex + 1}</span>
+                                    <input
+                                      type="text"
+                                      value={opt}
+                                      onChange={(e) => {
+                                        const options = [...q.options];
+                                        options[optIndex] = e.target.value;
+                                        handleUpdateQuestion(qIndex, { options });
+                                      }}
+                                      className="flex-1 bg-white px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none"
+                                      placeholder={`Word ${optIndex + 1}`}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const options = q.options.filter((_, i) => i !== optIndex);
+                                        handleUpdateQuestion(qIndex, { options });
+                                      }}
+                                      className="text-slate-400 hover:text-red-500 p-1"
+                                      title="Remove word"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const options = [...q.options, 'New Term'];
+                                  handleUpdateQuestion(qIndex, { options });
+                                }}
+                                className="text-[11px] font-bold text-[#4682B4] hover:text-[#3b6f9a] flex items-center gap-1 pt-1"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Add Word Bank Term</span>
+                              </button>
+                            </div>
+
+                            {/* Gap to word selector */}
+                            <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                                Correct Word for Each Gap:
+                              </span>
+                              <div className="flex flex-wrap items-center gap-3">
+                                {(q.body.match(/\[(\d+)\]/g) || ['[1]', '[2]', '[3]']).map((_, gapIdx) => {
+                                  const gapNum = gapIdx + 1;
+                                  const assignedOptIdx = q.correct_options[gapIdx] ?? Math.min(gapIdx, q.options.length - 1);
+                                  return (
+                                    <div key={gapIdx} className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-200 text-xs">
+                                      <span className="font-bold text-[#4682B4]">Gap [{gapNum}]:</span>
+                                      <select
+                                        value={assignedOptIdx}
+                                        onChange={(e) => {
+                                          const correct_options = [...q.correct_options];
+                                          correct_options[gapIdx] = Number(e.target.value);
+                                          handleUpdateQuestion(qIndex, { correct_options });
+                                        }}
+                                        className="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs font-semibold text-slate-800 focus:outline-none"
+                                      >
+                                        {q.options.map((opt, optIdx) => (
+                                          <option key={optIdx} value={optIdx}>
+                                            {opt}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Options with Particify Tile Badges (A, B, C, D) for standard choices */}
+                        {q.format !== 'WORD_CLOUD' && q.format !== 'CLOZE' && (
                           <div className="space-y-1.5">
                             {q.options.map((opt, optIndex) => {
                               const isCorrect = q.correct_options.includes(optIndex);
@@ -2491,62 +2635,58 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                   </div>
                 </div>
               ) : (
-                /* PAPER / MEMO HEADER: CLEAN OCCUPATIONAL HEADING & PEER REVIEW BLOCK */
-                <div id="fsa-paper-header" className="border-b-2 border-slate-900 pb-3 space-y-2">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <span className="text-[11px] font-bold text-[#4682B4] uppercase tracking-wider block">
-                        {selectedCourse?.title || 'Occupational Store Person'} • Assessment Paper
+                /* PAPER / MEMO HEADER: ULTRA-COMPACT OCCUPATIONAL HEADING & 1-LINE PEER STRIP */
+                <div id="fsa-paper-header" className="border-b-2 border-slate-900 pb-2 space-y-1.5 text-xs">
+                  {/* Row 1: Course Title & Cluster + Marks & Time */}
+                  <div className="flex items-center justify-between gap-3 border-b border-slate-300 pb-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-[11px] font-black text-[#4682B4] uppercase tracking-wider">
+                        {selectedCourse?.code || 'OQ'} • {selectedCourse?.title || 'Occupational Store Person'}
                       </span>
-                      <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
+                      <span className="text-slate-400 font-bold">•</span>
+                      <h1 className="text-xs font-black text-slate-900">
                         Cluster {selectedCluster?.cluster_number}: {selectedCluster?.title || selectedSet.title}
                       </h1>
                     </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-xs font-bold text-slate-900 bg-slate-100 border border-slate-300 px-2.5 py-1 rounded">
-                        Total: <span className="text-[#2e7d32] font-black">{selectedSet.questions.reduce((sum, q) => sum + (q.marks || 1), 0)} Marks</span>
-                      </div>
-                      <span className="text-[10px] text-slate-500 block mt-0.5">
-                        Time Allowed: {selectedSet.time_allowed_minutes || (selectedCluster?.weighting_percentage && selectedCluster.weighting_percentage >= 45 ? 45 : 30)} Minutes
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-bold text-slate-700 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded text-[11px]">
+                        Total: <strong className="text-[#2e7d32]">{selectedSet.questions.reduce((sum, q) => sum + (q.marks || 1), 0)} Marks</strong>
+                      </span>
+                      <span className="text-[10px] text-slate-600 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded font-medium">
+                        Time Allowed: {selectedSet.time_allowed_minutes || (selectedCluster?.weighting_percentage && selectedCluster.weighting_percentage >= 45 ? 45 : 30)} min
                       </span>
                     </div>
                   </div>
 
-                  {/* Clean Peer-Review Header Box */}
-                  <div className="border border-slate-300 rounded-lg p-3 bg-slate-50/70 text-xs">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="border-b border-slate-300 pb-1">
-                        <span className="font-bold text-slate-700 block text-[11px]">Learner Full Name:</span>
-                        <span className="block h-4"></span>
-                      </div>
-                      <div className="border-b border-slate-300 pb-1">
-                        <span className="font-bold text-slate-700 block text-[11px]">Peer Reviewer (Checked By):</span>
-                        <span className="block h-4"></span>
-                      </div>
-                      <div className="border-b border-slate-300 pb-1">
-                        <span className="font-bold text-slate-700 block text-[11px]">Peer Review Score:</span>
-                        <span className="block h-4 text-slate-400 font-mono">
-                          ______ / {selectedSet.questions.reduce((sum, q) => sum + (q.marks || 1), 0)} Marks
-                        </span>
-                      </div>
+                  {/* Row 2: 1-Line Compact Peer Review Strip */}
+                  <div className="flex items-center justify-between gap-4 bg-slate-50 border border-slate-300 rounded px-2.5 py-1 text-[11px]">
+                    <div className="flex items-center gap-1.5 flex-1">
+                      <span className="font-bold text-slate-700">Learner Name:</span>
+                      <span className="border-b border-slate-400 flex-1 min-w-[120px] h-3.5 inline-block"></span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-1">
+                      <span className="font-bold text-slate-700">Checked By (Peer):</span>
+                      <span className="border-b border-slate-400 flex-1 min-w-[120px] h-3.5 inline-block"></span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="font-bold text-slate-700">Score:</span>
+                      <span className="font-mono text-slate-500 font-bold">_____ / {selectedSet.questions.reduce((sum, q) => sum + (q.marks || 1), 0)}</span>
                     </div>
                   </div>
 
-                  {/* Clean Assessment Instructions */}
-                  <div className="text-[11px] text-slate-600 bg-amber-50/50 p-2.5 rounded border border-amber-200">
-                    <span className="font-bold text-amber-900 block mb-0.5">Assessment Instructions:</span>
-                    <ol className="list-decimal pl-4 space-y-0.5 text-slate-700">
-                      <li>Answer ALL questions individually. For calculations, write your working steps in the spaces provided.</li>
-                      <li>Once completed, swap papers with your peer for review.</li>
-                      <li>Mark your partner&apos;s paper against the model answers displayed on the classroom screen.</li>
-                    </ol>
+                  {/* Row 3: 1-Line Compact Instructions */}
+                  <div className="text-[10px] text-slate-600 bg-amber-50/60 px-2 py-0.5 rounded border border-amber-200/80 flex items-center justify-between">
+                    <span className="font-bold text-amber-900">Instructions:</span>
+                    <span className="text-slate-700 truncate pl-2">
+                      Answer ALL questions. For calculations, write working steps. Swap papers upon completion for peer review against classroom projector model answers.
+                    </span>
                   </div>
                 </div>
               )}
 
               {/* Questions Section */}
-              <div className="space-y-6 pt-2">
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 border-b border-slate-400 pb-1">
+              <div className="space-y-3 pt-1">
+                <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-800 border-b border-slate-400 pb-0.5">
                   Section A: Assessment Questions & Practical Scenarios
                 </h3>
 
@@ -2574,27 +2714,27 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                   return (
                     <div 
                       key={q.id || idx} 
-                      className={`question-print-item space-y-2 pb-5 border-b last:border-b-0 ${
+                      className={`question-print-item space-y-1.5 pb-2.5 border-b last:border-b-0 ${
                         fsaPaperMode === 'projector' 
-                          ? 'border-slate-800 bg-[#121d3a] p-5 sm:p-6 rounded-2xl' 
+                          ? 'border-slate-800 bg-[#121d3a] p-5 sm:p-6 rounded-2xl mb-4' 
                           : 'border-slate-200'
                       }`}
                     >
                       {/* Question Stem & Marks */}
                       <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-2.5">
+                        <div className="flex items-start gap-2">
                           <span className={`font-extrabold text-xs shrink-0 pt-0.5 ${
                             fsaPaperMode === 'projector' ? 'text-[#6DC082] text-sm' : 'text-slate-900'
                           }`}>
-                            Question {idx + 1}.
+                            Q{idx + 1}.
                           </span>
-                          <p className={`font-semibold leading-relaxed ${
+                          <p className={`font-semibold leading-snug ${
                             fsaPaperMode === 'projector' ? 'text-sm sm:text-base text-white' : 'text-xs text-slate-800'
                           }`}>
                             {q.body}
                           </p>
                         </div>
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded border shrink-0 font-mono ${
+                        <span className={`text-[11px] font-bold px-1.5 py-0.2 rounded border shrink-0 font-mono ${
                           fsaPaperMode === 'projector'
                             ? 'bg-[#1e2e54] text-emerald-400 border-[#2b4175]'
                             : 'text-slate-700 bg-slate-100 border-slate-300'
@@ -2603,79 +2743,186 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                         </span>
                       </div>
 
-                      {/* Options */}
-                      {q.format !== 'WORD_CLOUD' && (
+                      {/* CLOZE (Fill in the Gap with Word Bank) Rendering */}
+                      {q.format === 'CLOZE' && (
                         <div className={`space-y-1.5 pt-1 ${fsaPaperMode === 'projector' ? 'pl-7' : 'pl-6'}`}>
-                          {q.options.map((opt, optIdx) => {
-                            const isCorrect = q.correct_options.includes(optIdx);
-                            const letter = optionLetters[optIdx] || String(optIdx + 1);
-
-                            if (fsaPaperMode === 'projector') {
-                              return (
-                                <div
-                                  key={optIdx}
-                                  className={`flex items-center justify-between gap-2.5 text-xs sm:text-sm p-2.5 rounded-xl border transition-all ${
-                                    isCorrect
-                                      ? 'bg-emerald-950/60 border-emerald-500 text-white font-bold shadow-[0_0_12px_rgba(16,185,129,0.2)]'
-                                      : 'bg-[#0b1329]/60 border-[#1e2e54] text-slate-400 opacity-60'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2.5">
-                                    <span className={`w-5 h-5 rounded-md flex items-center justify-center font-bold text-xs shrink-0 ${
-                                      isCorrect ? 'bg-emerald-600 text-white' : 'bg-[#121d3a] text-slate-400'
-                                    }`}>
-                                      {isCorrect ? '✓' : letter}
-                                    </span>
-                                    <span>{opt}</span>
-                                  </div>
-                                  {isCorrect && (
-                                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">
-                                      Correct Answer
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            }
-
-                            return (
-                              <div
-                                key={optIdx}
-                                className={`flex items-start gap-2.5 text-xs p-1.5 rounded ${
-                                  fsaPaperMode === 'memo' && isCorrect
-                                    ? 'bg-emerald-50 border border-emerald-400 text-emerald-950 font-bold'
-                                    : 'text-slate-800'
+                          {/* Word Bank Container */}
+                          <div className={`p-1.5 rounded-lg border flex flex-wrap items-center gap-1.5 ${
+                            fsaPaperMode === 'projector' 
+                              ? 'bg-[#0f172a] border-[#1e2e54] text-slate-200' 
+                              : 'bg-slate-50 border-slate-300 text-slate-800'
+                          }`}>
+                            <span className={`text-[10px] font-black uppercase tracking-wider mr-1 ${
+                              fsaPaperMode === 'projector' ? 'text-emerald-400' : 'text-slate-600'
+                            }`}>
+                              Word Bank:
+                            </span>
+                            {q.options.map((word, wIdx) => (
+                              <span
+                                key={wIdx}
+                                className={`px-2 py-0.5 rounded text-xs font-semibold border ${
+                                  fsaPaperMode === 'projector'
+                                    ? 'bg-[#1e293b] border-[#2b4175] text-slate-200'
+                                    : 'bg-white border-slate-300 text-slate-800 shadow-2xs'
                                 }`}
                               >
-                                <span className={`w-4 h-4 border rounded-xs flex items-center justify-center shrink-0 text-[10px] font-bold ${
-                                  fsaPaperMode === 'memo' && isCorrect
-                                    ? 'bg-emerald-600 text-white border-emerald-600'
-                                    : 'border-slate-400 bg-white text-slate-700'
-                                }`}>
-                                  {fsaPaperMode === 'memo' && isCorrect ? '✓' : letter}
+                                {word}
+                              </span>
+                            ))}
+                          </div>
+
+                          {/* Paper Mode Write-in Blanks */}
+                          {fsaPaperMode === 'paper' && (
+                            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 pt-1 text-xs font-semibold text-slate-700">
+                              {(q.body.match(/\[(\d+)\]/g) || ['[1]', '[2]', '[3]']).map((_, gapIdx) => (
+                                <div key={gapIdx} className="flex items-center gap-1.5">
+                                  <span className="font-bold text-slate-800">({gapIdx + 1})</span>
+                                  <span className="border-b border-slate-400 w-32 inline-block"></span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Memo Mode Correct Answers Strip */}
+                          {fsaPaperMode === 'memo' && (
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-xs">
+                              {q.correct_options.map((optIdx, gapIdx) => (
+                                <span key={gapIdx} className="font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded">
+                                  ({gapIdx + 1}) {q.options[optIdx]}
                                 </span>
-                                <span className="flex-1">{opt}</span>
-                                {fsaPaperMode === 'memo' && isCorrect && (
-                                  <span className="text-[10px] text-emerald-700 font-extrabold uppercase shrink-0">
-                                    [Correct Answer]
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Projector Mode Answer Reveal */}
+                          {fsaPaperMode === 'projector' && (
+                            <div className="flex flex-wrap items-center gap-2.5 pt-1.5">
+                              {q.correct_options.map((optIdx, gapIdx) => (
+                                <div
+                                  key={gapIdx}
+                                  className="px-3 py-1.5 rounded-xl bg-emerald-950/70 border border-emerald-500 text-emerald-200 text-xs sm:text-sm font-bold shadow-[0_0_12px_rgba(16,185,129,0.25)] flex items-center gap-2"
+                                >
+                                  <span className="w-5 h-5 rounded-md bg-emerald-600 text-white flex items-center justify-center font-mono text-xs">
+                                    {gapIdx + 1}
                                   </span>
-                                )}
-                              </div>
-                            );
-                          })}
+                                  <span>{q.options[optIdx]}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Standard Options (MCQ, MULTIPLE, BINARY) */}
+                      {q.format !== 'WORD_CLOUD' && q.format !== 'CLOZE' && (
+                        <div className={`pt-1 ${fsaPaperMode === 'projector' ? 'pl-7' : 'pl-6'}`}>
+                          {fsaPaperMode === 'projector' ? (
+                            <div className="space-y-1.5">
+                              {q.options.map((opt, optIdx) => {
+                                const isCorrect = q.correct_options.includes(optIdx);
+                                const letter = optionLetters[optIdx] || String(optIdx + 1);
+                                return (
+                                  <div
+                                    key={optIdx}
+                                    className={`flex items-center justify-between gap-2.5 text-xs sm:text-sm p-2.5 rounded-xl border transition-all ${
+                                      isCorrect
+                                        ? 'bg-emerald-950/60 border-emerald-500 text-white font-bold shadow-[0_0_12px_rgba(16,185,129,0.2)]'
+                                        : 'bg-[#0b1329]/60 border-[#1e2e54] text-slate-400 opacity-60'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2.5">
+                                      <span className={`w-5 h-5 rounded-md flex items-center justify-center font-bold text-xs shrink-0 ${
+                                        isCorrect ? 'bg-emerald-600 text-white' : 'bg-[#121d3a] text-slate-400'
+                                      }`}>
+                                        {isCorrect ? '✓' : letter}
+                                      </span>
+                                      <span>{opt}</span>
+                                    </div>
+                                    {isCorrect && (
+                                      <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">
+                                        Correct Answer
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : q.format === 'BINARY' ? (
+                            /* Binary (True/False): Inline 1-Line Flex */
+                            <div className="flex items-center gap-6 text-xs">
+                              {q.options.map((opt, optIdx) => {
+                                const isCorrect = q.correct_options.includes(optIdx);
+                                const letter = optionLetters[optIdx] || String(optIdx + 1);
+                                return (
+                                  <div
+                                    key={optIdx}
+                                    className={`flex items-center gap-2 py-0.5 px-1.5 rounded ${
+                                      fsaPaperMode === 'memo' && isCorrect
+                                        ? 'bg-emerald-50 border border-emerald-400 text-emerald-950 font-bold'
+                                        : 'text-slate-800'
+                                    }`}
+                                  >
+                                    <span className={`w-4 h-4 border rounded-xs flex items-center justify-center shrink-0 text-[10px] font-bold ${
+                                      fsaPaperMode === 'memo' && isCorrect
+                                        ? 'bg-emerald-600 text-white border-emerald-600'
+                                        : 'border-slate-400 bg-white text-slate-700'
+                                    }`}>
+                                      {fsaPaperMode === 'memo' && isCorrect ? '✓' : letter}
+                                    </span>
+                                    <span>{opt}</span>
+                                    {fsaPaperMode === 'memo' && isCorrect && (
+                                      <span className="text-[10px] text-emerald-700 font-extrabold uppercase">
+                                        [Correct]
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            /* MCQ & Multiple: Compact 2-Column Grid (Halves vertical space) */
+                            <div className="question-options-grid grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                              {q.options.map((opt, optIdx) => {
+                                const isCorrect = q.correct_options.includes(optIdx);
+                                const letter = optionLetters[optIdx] || String(optIdx + 1);
+                                return (
+                                  <div
+                                    key={optIdx}
+                                    className={`flex items-start gap-2 py-0.5 px-1 rounded ${
+                                      fsaPaperMode === 'memo' && isCorrect
+                                        ? 'bg-emerald-50 border border-emerald-400 text-emerald-950 font-bold'
+                                        : 'text-slate-800'
+                                    }`}
+                                  >
+                                    <span className={`w-4 h-4 border rounded-xs flex items-center justify-center shrink-0 text-[10px] font-bold mt-0.5 ${
+                                      fsaPaperMode === 'memo' && isCorrect
+                                        ? 'bg-emerald-600 text-white border-emerald-600'
+                                        : 'border-slate-400 bg-white text-slate-700'
+                                    }`}>
+                                      {fsaPaperMode === 'memo' && isCorrect ? '✓' : letter}
+                                    </span>
+                                    <span className="flex-1 leading-snug">{opt}</span>
+                                    {fsaPaperMode === 'memo' && isCorrect && (
+                                      <span className="text-[9px] text-emerald-700 font-extrabold uppercase shrink-0 pt-0.5">
+                                        [✓]
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       )}
 
                       {/* Paper Mode: Calculation / Working Space for math & scenario questions */}
                       {fsaPaperMode === 'paper' && isCalculationQuestion && (
-                        <div className="pl-6 pt-2">
-                          <div className="border border-dashed border-slate-300 rounded p-2 text-[10.5px] text-slate-500 bg-slate-50/40">
-                            <span className="font-semibold text-slate-600 block mb-1">
-                              Show Calculations / Workplace Working Steps:
+                        <div className="pl-6 pt-1">
+                          <div className="border border-dashed border-slate-300 rounded px-2 py-0.5 text-[10px] text-slate-500 bg-slate-50/40">
+                            <span className="font-semibold text-slate-600 block">
+                              Working Steps / Calculation Space:
                             </span>
-                            <div className="space-y-3 py-1">
-                              <div className="border-b border-slate-200"></div>
-                              <div className="border-b border-slate-200"></div>
-                            </div>
+                            <div className="h-4 border-b border-slate-200 border-dashed"></div>
                           </div>
                         </div>
                       )}
@@ -2711,8 +2958,8 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
 
                       {/* Memorandum Mode: Dual Model Answer Box */}
                       {fsaPaperMode === 'memo' && q.additional_text && (
-                        <div className="pl-6 pt-2 space-y-2">
-                          <div className="p-3 rounded-lg bg-emerald-50/70 border border-emerald-300 text-xs text-slate-800 font-mono whitespace-pre-line leading-relaxed">
+                        <div className="pl-6 pt-1 space-y-1">
+                          <div className="p-2 rounded-lg bg-emerald-50/70 border border-emerald-300 text-xs text-slate-800 font-mono whitespace-pre-line leading-relaxed">
                             {q.additional_text}
                           </div>
                         </div>
@@ -2724,7 +2971,7 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
 
               {/* Clean Peer-Review Footer */}
               {fsaPaperMode !== 'projector' && (
-                <div id="fsa-paper-footer" className="border-t border-slate-300 pt-3 mt-6 flex flex-wrap items-center justify-between text-xs text-slate-600 gap-3">
+                <div id="fsa-paper-footer" className="border-t border-slate-300 pt-2 mt-4 flex flex-wrap items-center justify-between text-xs text-slate-600 gap-3">
                   <div>Peer Reviewer Signature: _______________________</div>
                   <div>Date: _______________________</div>
                   <div className="font-semibold text-slate-800">
@@ -2742,11 +2989,13 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
         @media print {
           @page {
             size: A4 portrait;
-            margin: 12mm 15mm 12mm 15mm;
+            margin: 6mm 10mm 6mm 10mm;
           }
           html, body {
             background: white !important;
             color: black !important;
+            font-size: 11px !important;
+            line-height: 1.35 !important;
             height: auto !important;
             overflow: visible !important;
           }
@@ -2788,15 +3037,24 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
             break-inside: avoid !important;
             page-break-after: avoid !important;
             break-after: avoid !important;
+            margin-bottom: 6px !important;
           }
           .question-print-item {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
+            padding-bottom: 5px !important;
+            margin-bottom: 5px !important;
+          }
+          .question-options-grid {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 2px 12px !important;
           }
           #fsa-paper-footer {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
-            margin-top: 20px !important;
+            margin-top: 10px !important;
+            padding-top: 6px !important;
           }
         }
       `}} />

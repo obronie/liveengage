@@ -327,6 +327,7 @@ CRITICAL FRAMING RULES & STEM VARIETY:
 3. PLAUSIBLE DISTRACTORS: For MCQ/MULTIPLE, wrong choices must represent genuine, realistic workplace misconceptions, calculation pitfalls, or commonly confused numbers/terms. Never use obvious joke options.
 4. BALANCED POSITIONS: Distribute correct options roughly evenly across option positions (A, B, C, D). Avoid always making the second option correct.
 5. STANDALONE STRINGS: Never include order prefixes like "1.", "2.", "A." or "Step 1:" in the options array.
+6. "FILL IN THE GAP" (CLOZE) FORMAT: When generating 'CLOZE' format, the 'body' must be an occupational procedure or regulation passage with gaps marked as [1], [2], and optionally [3]. The 'options' array is the Word Bank containing the correct words/phrases plus 1-2 plausible distractors. The 'correctOptions' array contains the zero-based indexes of the options corresponding to gap [1], [2], [3] in order. Award 1 mark per gap.
 ${fsaDirective}
 7. RECOMMENDED DURATION: 30s (Binary/True-False), 45s (Standard MCQ), 60s (Multiple Choice/Calculations), 90s (Complex Workplace Scenarios).
 8. MARKS ALLOCATION: Allocate realistic integer marks per question: 1 mark for basic recall / SOP rules, 2 to 3 marks for multi-step math calculations (e.g. 15% VAT, delivery note variance, CRAVED shrinkage) or applied workplace scenarios.
@@ -383,7 +384,7 @@ Ensure each question connects the official Curriculum outcomes to the practical 
       properties: {
         format: {
           type: Type.STRING,
-          enum: ['MCQ', 'MULTIPLE', 'BINARY', 'SCALE', 'WORD_CLOUD'],
+          enum: ['MCQ', 'MULTIPLE', 'BINARY', 'SCALE', 'WORD_CLOUD', 'CLOZE'],
           description: 'Question format enum',
         },
         body: {
@@ -465,10 +466,21 @@ Ensure each question connects the official Curriculum outcomes to the practical 
             q.correctOptions = [];
           }
 
+          if (q.format === 'CLOZE') {
+            if (!Array.isArray(q.options) || q.options.length === 0) {
+              q.options = ['Standard Operating Procedure', 'Quality Quarantine', 'Delivery Note'];
+              q.correctOptions = [0, 1];
+            }
+            if (!Array.isArray(q.correctOptions) || q.correctOptions.length === 0) {
+              q.correctOptions = [0];
+            }
+            q.marks = Math.max(1, q.correctOptions.length);
+          }
+
           // Enforce timing defaults
           if (!q.duration || q.duration <= 0) {
             if (q.format === 'BINARY') q.duration = 30;
-            else if (q.format === 'MULTIPLE') q.duration = 60;
+            else if (q.format === 'MULTIPLE' || q.format === 'CLOZE') q.duration = 60;
             else q.duration = 45;
           }
 

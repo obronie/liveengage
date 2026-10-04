@@ -1,4 +1,4 @@
-export type QuestionFormat = 'MCQ' | 'MULTIPLE' | 'BINARY' | 'SCALE' | 'WORD_CLOUD';
+export type QuestionFormat = 'MCQ' | 'MULTIPLE' | 'BINARY' | 'SCALE' | 'WORD_CLOUD' | 'CLOZE';
 
 export type SessionEntryMode = 'individual' | 'group';
 
