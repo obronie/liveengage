@@ -6,9 +6,9 @@ export async function POST(req: NextRequest) {
   try {
     const body: GenerateQuestionsRequest = await req.json();
 
-    if (!body.prompt && !body.courseContext) {
+    if (!body.prompt && !body.courseContext && !body.learnerGuideNotes && !body.rawNotebookExtract && !body.clusterTitle) {
       return NextResponse.json(
-        { error: 'Either prompt or courseContext is required' },
+        { error: 'Please provide course context, cluster information, or Gemini Notebook extracts' },
         { status: 400 }
       );
     }

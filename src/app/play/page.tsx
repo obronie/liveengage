@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AppStore } from '@/lib/store';
 import { Session, Question, Participant, ResponseRecord } from '@/types';
@@ -14,10 +14,10 @@ import {
   XCircle, 
   Sparkles, 
   Send, 
-  RotateCcw, 
   Trophy, 
   AlertCircle,
-  HelpCircle
+  HelpCircle,
+  Tag
 } from 'lucide-react';
 
 function ParticipantPlayContent() {
@@ -40,7 +40,6 @@ function ParticipantPlayContent() {
   const [wordSubmission, setWordSubmission] = useState<string>('');
   const [justSubmittedFeedback, setJustSubmittedFeedback] = useState<boolean>(false);
   const [currentResponse, setCurrentResponse] = useState<ResponseRecord | null>(null);
-  const [localQuestionIndex, setLocalQuestionIndex] = useState<number>(0);
 
   // Timer
   const [timeLeft, setTimeLeft] = useState<number>(60);
@@ -55,13 +54,23 @@ function ParticipantPlayContent() {
       }
       setDeviceIdentifier(storedUuid);
 
-      // Check if room is in query
       if (roomQuery) {
         setPin(roomQuery);
         lookupRoom(roomQuery);
       }
     }
   }, [roomQuery]);
+
+  // Reconnection Engine: Re-sync state on mobile wake-up / tab switch
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && session?.room_code) {
+        lookupRoom(session.room_code);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [session?.room_code]);
 
   // Lookup Room by PIN
   const lookupRoom = async (code: string) => {
@@ -84,7 +93,7 @@ function ParticipantPlayContent() {
       setDisplayName('');
       setStage('identity');
     } else {
-      const remembered = localStorage.getItem('liveengage_individual_name') || '';
+      const remembered = typeof window !== 'undefined' ? localStorage.getItem('liveengage_individual_name') || '' : '';
       if (remembered) {
         setDisplayName(remembered);
       }
@@ -92,11 +101,11 @@ function ParticipantPlayContent() {
     }
   };
 
-  const handleJoinSession = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleJoinSession = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!displayName.trim() || !session) return;
 
-    if (session.entry_mode === 'individual') {
+    if (session.entry_mode === 'individual' && typeof window !== 'undefined') {
       localStorage.setItem('liveengage_individual_name', displayName.trim());
     }
 
@@ -108,41 +117,41 @@ function ParticipantPlayContent() {
     );
     setParticipant(p);
 
-    if (session.pacing_mode === 'start_now') {
-      setStage('active');
-    } else if (session.status === 'lobby') {
+    // Determine initial stage based on session status
+    if (session.status === 'lobby') {
       setStage('waiting');
-    } else if (session.status === 'completed') {
-      setStage('completed');
+    } else if (session.status === 'question_active' || session.status === 'question_locked') {
+      setStage('active');
     } else if (session.status === 'revealed') {
       setStage('revealed');
-    } else {
-      setStage('active');
+    } else if (session.status === 'completed') {
+      setStage('completed');
     }
   };
 
-  // Real-time synchronization subscription
+  // Subscribe to room events (BroadcastChannel + Supabase Realtime)
   useEffect(() => {
     if (!session?.room_code) return;
 
     const unsubscribe = AppStore.subscribeToRoom(session.room_code, (event) => {
       if (event.type === 'SESSION_UPDATED') {
-        const updatedSession = event.payload as Session;
-        setSession(updatedSession);
+        const updatedSess = event.payload as Session;
+        setSession((prev) => ({ ...(prev || {}), ...updatedSess }));
 
-        if (updatedSession.pacing_mode !== 'start_now') {
-          if (updatedSession.status === 'lobby') {
-            setStage('waiting');
-          } else if (updatedSession.status === 'completed') {
-            setStage('completed');
-            // Automatically clear group identity cache so shared classroom tablet is clean for next cohort!
-            if (updatedSession.entry_mode === 'group') {
-              setDisplayName('');
-            }
-          } else if (updatedSession.status === 'revealed') {
-            setStage('revealed');
-          } else if (updatedSession.status === 'question_active') {
-            setStage('active');
+        if (updatedSess.status === 'lobby') {
+          setStage('waiting');
+        } else if (updatedSess.status === 'question_active') {
+          setStage('active');
+          setJustSubmittedFeedback(false);
+        } else if (updatedSess.status === 'question_locked') {
+          // Keep active view but disable choices
+        } else if (updatedSess.status === 'revealed') {
+          setStage('revealed');
+        } else if (updatedSess.status === 'completed') {
+          setStage('completed');
+          // Clear temporary group cache so shared tablets are fresh
+          if (updatedSess.entry_mode === 'group' && typeof window !== 'undefined') {
+            localStorage.removeItem('liveengage_group_table');
           }
         }
       }
@@ -151,66 +160,21 @@ function ParticipantPlayContent() {
     return () => unsubscribe();
   }, [session?.room_code]);
 
-  const isSelfPaced = session?.pacing_mode === 'start_now';
-  const activeQIndex = isSelfPaced ? localQuestionIndex : (session?.current_question_index || 0);
+  // Synchronized countdown timer based on server question_timer_end
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (session?.status === 'question_active' && session.question_timer_end) {
+      interval = setInterval(() => {
+        const diffMs = new Date(session.question_timer_end!).getTime() - Date.now();
+        const secondsRemaining = Math.max(0, Math.ceil(diffMs / 1000));
+        setTimeLeft(secondsRemaining);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [session?.status, session?.question_timer_end]);
+
+  const activeQIndex = session?.current_question_index ?? 0;
   const currentQ = session?.questions?.[activeQIndex];
-
-  // Handle choice selection (Blind Review - can change choices freely while timer runs!)
-  const handleToggleOption = (optIndex: number) => {
-    if (!session) return;
-    if (!isSelfPaced && (session.status === 'question_locked' || session.status === 'revealed')) return;
-    if (!currentQ) return;
-
-    let updated: number[] = [];
-    if (currentQ.format === 'MCQ' || currentQ.format === 'BINARY' || currentQ.format === 'SCALE') {
-      updated = [optIndex];
-    } else if (currentQ.format === 'MULTIPLE') {
-      if (selectedChoices.includes(optIndex)) {
-        updated = selectedChoices.filter(i => i !== optIndex);
-      } else {
-        updated = [...selectedChoices, optIndex];
-      }
-    }
-
-    setSelectedChoices(updated);
-    submitChoiceToStore(updated);
-  };
-
-  const handleWordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!wordSubmission.trim()) return;
-    submitChoiceToStore(wordSubmission.trim());
-  };
-
-  const submitChoiceToStore = async (val: number[] | string) => {
-    if (!session || !participant || !currentQ) return;
-
-    // Show playful confirmation immediately
-    setJustSubmittedFeedback(true);
-
-    const resp = await AppStore.submitResponse(
-      session,
-      currentQ,
-      participant,
-      val,
-      currentQ.duration - timeLeft
-    );
-    setCurrentResponse(resp);
-  };
-
-  const handleSelfPacedNextQuestion = () => {
-    if (!session || !session.questions) return;
-    const nextIdx = localQuestionIndex + 1;
-    if (nextIdx < session.questions.length) {
-      setLocalQuestionIndex(nextIdx);
-      setSelectedChoices([]);
-      setWordSubmission('');
-      setJustSubmittedFeedback(false);
-      setCurrentResponse(null);
-    } else {
-      setStage('completed');
-    }
-  };
 
   // Reset selections when question changes
   useEffect(() => {
@@ -221,7 +185,6 @@ function ParticipantPlayContent() {
         setWordSubmission('');
         setJustSubmittedFeedback(false);
 
-        // Load existing response if any
         if (participant) {
           const existing = AppStore.getResponses(session.id, q.id).find(
             r => r.participant_id === participant.id
@@ -239,32 +202,81 @@ function ParticipantPlayContent() {
     }
   }, [activeQIndex, session?.id, participant?.id]);
 
+  // Handle Option Selection (Blind Review: can freely toggle/change until locked)
+  const handleSelectOption = async (optionIndex: number) => {
+    if (!session || !currentQ || !participant) return;
+    if (session.status === 'question_locked' || session.status === 'revealed' || session.status === 'completed') {
+      return;
+    }
+
+    let updatedSelection: number[];
+    if (currentQ.format === 'MCQ' || currentQ.format === 'BINARY' || currentQ.format === 'SCALE') {
+      updatedSelection = [optionIndex];
+    } else {
+      // MULTIPLE choice
+      if (selectedChoices.includes(optionIndex)) {
+        updatedSelection = selectedChoices.filter(i => i !== optionIndex);
+      } else {
+        updatedSelection = [...selectedChoices, optionIndex];
+      }
+    }
+
+    setSelectedChoices(updatedSelection);
+    setJustSubmittedFeedback(true);
+
+    const elapsed = currentQ.duration > 0 ? Math.max(0, currentQ.duration - timeLeft) : 0;
+    const resp = await AppStore.submitResponse(
+      session,
+      currentQ,
+      participant,
+      updatedSelection,
+      elapsed
+    );
+    setCurrentResponse(resp);
+  };
+
+  const handleWordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!session || !currentQ || !participant || !wordSubmission.trim()) return;
+    if (session.status === 'question_locked' || session.status === 'revealed') return;
+
+    setJustSubmittedFeedback(true);
+    const resp = await AppStore.submitResponse(
+      session,
+      currentQ,
+      participant,
+      wordSubmission.trim(),
+      0
+    );
+    setCurrentResponse(resp);
+  };
+
   return (
-    <div className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col font-sans select-none">
-      {/* Top Mobile Bar */}
-      <header className="h-14 px-4 bg-slate-950/90 border-b border-slate-800/80 flex items-center justify-between shrink-0 sticky top-0 z-20">
+    <div className="min-h-screen bg-[#F1F9F3] text-slate-800 flex flex-col font-sans select-none antialiased">
+      {/* Top Mobile Bar in LearnBlended Palette */}
+      <header className="h-14 px-4 bg-white border-b border-[#D5E3EF] flex items-center justify-between shrink-0 sticky top-0 z-20 shadow-xs">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
+          <div className="w-8 h-8 rounded-lg bg-[#4682B4] flex items-center justify-center text-white shadow-xs">
             <Radio className="w-4 h-4" />
           </div>
-          <span className="font-bold text-sm tracking-tight text-white">LiveEngage</span>
+          <span className="font-bold text-sm tracking-tight text-slate-800">LearnBlended Poll</span>
         </div>
 
         {session && participant && (
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-indigo-300 border border-slate-700">
+            <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-[#4682B4] border border-slate-200">
               PIN: {session.room_code}
             </span>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs font-semibold text-emerald-300">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#6DC082]/15 border border-[#6DC082]/30 text-xs font-bold text-[#2e7d32]">
               {session.entry_mode === 'group' ? (
                 <>
                   <Users className="w-3.5 h-3.5" />
-                  <span className="truncate max-w-[120px]">Group: {participant.display_name}</span>
+                  <span className="truncate max-w-[110px]">{participant.display_name}</span>
                 </>
               ) : (
                 <>
                   <User className="w-3.5 h-3.5" />
-                  <span className="truncate max-w-[120px]">{participant.display_name}</span>
+                  <span className="truncate max-w-[110px]">{participant.display_name}</span>
                 </>
               )}
             </div>
@@ -272,18 +284,19 @@ function ParticipantPlayContent() {
         )}
       </header>
 
-      {/* Main Container */}
+      {/* Main Mobile Screen */}
       <main className="flex-1 flex flex-col p-4 sm:p-6 max-w-md w-full mx-auto justify-center">
+        
         {/* STAGE 1: PIN ENTRY */}
         {stage === 'pin' && (
           <div className="my-auto space-y-6 text-center animate-in fade-in zoom-in-95 duration-150">
             <div>
-              <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mx-auto mb-4">
+              <div className="w-16 h-16 rounded-2xl bg-[#4682B4]/10 border border-[#4682B4]/20 flex items-center justify-center text-[#4682B4] mx-auto mb-4 shadow-xs">
                 <Radio className="w-8 h-8" />
               </div>
-              <h1 className="text-2xl font-black text-white">Join Training Session</h1>
-              <p className="text-xs text-slate-400 mt-1">
-                Enter the 6-digit room PIN displayed on the facilitator screen
+              <h1 className="text-2xl font-black text-slate-800">Join Live Session</h1>
+              <p className="text-xs text-slate-500 mt-1">
+                Enter the 6-digit room PIN displayed on the classroom screen
               </p>
             </div>
 
@@ -302,11 +315,11 @@ function ParticipantPlayContent() {
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 placeholder="000000"
-                className="w-full text-center text-3xl font-mono font-black tracking-widest px-4 py-3.5 rounded-2xl bg-slate-900 border-2 border-indigo-500/40 text-white placeholder-slate-700 focus:outline-none focus:border-indigo-500"
+                className="w-full text-center text-3xl font-mono font-black tracking-widest px-4 py-3.5 rounded-2xl bg-white border-2 border-[#4682B4]/40 text-slate-800 placeholder-slate-300 focus:outline-none focus:border-[#4682B4] shadow-sm"
               />
 
               {errorMessage && (
-                <p className="text-xs text-red-400 bg-red-950/40 p-2.5 rounded-xl border border-red-800">
+                <p className="text-xs text-red-600 bg-red-50 p-2.5 rounded-xl border border-red-200">
                   {errorMessage}
                 </p>
               )}
@@ -314,7 +327,7 @@ function ParticipantPlayContent() {
               <button
                 type="submit"
                 disabled={pin.trim().length !== 6}
-                className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 disabled:opacity-50 transition-all min-h-[48px]"
+                className="w-full py-3.5 rounded-xl bg-[#4682B4] hover:bg-[#3b6f9a] text-white font-bold text-sm shadow-md shadow-[#4682B4]/20 disabled:opacity-50 transition-all min-h-[48px]"
               >
                 Continue to Session
               </button>
@@ -322,71 +335,74 @@ function ParticipantPlayContent() {
           </div>
         )}
 
-        {/* STAGE 2: IDENTITY GATE (Individual vs Group) */}
+        {/* STAGE 2: STRICT IDENTITY GATE (Individual vs Group) */}
         {stage === 'identity' && session && (
           <div className="my-auto space-y-6 animate-in fade-in duration-150">
             <div className="text-center">
-              <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+              <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded bg-[#4682B4]/15 text-[#4682B4] border border-[#4682B4]/30">
                 ROOM PIN: {session.room_code}
               </span>
-              <h1 className="text-xl font-bold text-white mt-2">{session.title}</h1>
-              <p className="text-xs text-slate-400 mt-1">
-                {session.group?.client_name} • {session.group?.group_name}
+              <h1 className="text-xl font-bold text-slate-800 mt-2">{session.title}</h1>
+              <p className="text-xs text-slate-500 mt-1">
+                {session.client_name} • Cohort {session.cohort_number}
               </p>
             </div>
 
-            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
+            <div className="p-6 rounded-2xl bg-white border border-[#D5E3EF] shadow-sm space-y-4">
               {session.entry_mode === 'group' ? (
-                /* Group Mode: Only numbers 1-10 */
+                /* Group Mode: Prompt for Table Number or Team Name */
                 <div>
-                  <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase tracking-wider mb-1">
+                  <div className="flex items-center gap-2 text-[#4682B4] text-xs font-bold uppercase tracking-wider mb-1">
                     <Users className="w-4 h-4" />
-                    <span>Group (Only numbers 1-10)</span>
+                    <span>Table Team Identity</span>
                   </div>
-                  <p className="text-xs text-slate-400 mb-3">
-                    Tap your Group / Table number (1–10):
+                  <p className="text-xs text-slate-600 mb-3">
+                    Tap your Table Number (1–10) or type your team name:
                   </p>
+                  
+                  {/* Quick Table Buttons 1 to 10 */}
                   <div className="grid grid-cols-5 gap-2 mb-3">
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
-                      const isSelected = displayName === `Group ${num}` || displayName === `Table ${num}` || displayName === `${num}`;
+                      const isSelected = displayName === `Table ${num}` || displayName === `Group ${num}`;
                       return (
                         <button
                           key={num}
                           type="button"
-                          onClick={() => setDisplayName(`Group ${num}`)}
-                          className={`py-2.5 rounded-xl font-bold text-sm border transition-all ${
+                          onClick={() => setDisplayName(`Table ${num}`)}
+                          className={`py-2 rounded-xl font-bold text-xs border transition-all ${
                             isSelected
-                              ? 'bg-indigo-600 text-white border-indigo-400 shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400'
-                              : 'bg-slate-950 text-slate-300 border-slate-700 hover:border-slate-500 hover:text-white'
+                              ? 'bg-[#4682B4] text-white border-[#4682B4] shadow-sm'
+                              : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-[#4682B4]'
                           }`}
                         >
-                          {num}
+                          T{num}
                         </button>
                       );
                     })}
                   </div>
+
                   <input
                     type="text"
                     required
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="e.g. Group 1"
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-semibold"
+                    placeholder="e.g. Table 1 or The Titans"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#4682B4] font-semibold"
                   />
-                  <p className="text-[10px] text-amber-400/90 mt-2 flex items-center gap-1">
+                  <p className="text-[10px] text-amber-600 mt-2 flex items-center gap-1 font-medium">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>Always fresh per session — shared tablet memory is never assumed.</span>
+                    <span>Always prompted fresh — shared tablet identity is never assumed.</span>
                   </p>
                 </div>
               ) : (
                 /* Individual Mode */
                 <div>
-                  <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase tracking-wider mb-1">
+                  <div className="flex items-center gap-2 text-[#4682B4] text-xs font-bold uppercase tracking-wider mb-1">
                     <User className="w-4 h-4" />
-                    <span>Learner Identity</span>
+                    <span>Individual Learner</span>
                   </div>
-                  <p className="text-xs text-slate-400 mb-3">
-                    Enter your Name and Surname.
+                  <p className="text-xs text-slate-600 mb-3">
+                    Enter your Name and Surname:
                   </p>
                   <input
                     type="text"
@@ -394,16 +410,16 @@ function ParticipantPlayContent() {
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="e.g. Sipho Dlamini"
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-semibold min-h-[48px]"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#4682B4] font-semibold min-h-[48px]"
                   />
                 </div>
               )}
 
               <button
                 type="button"
-                onClick={handleJoinSession}
+                onClick={() => handleJoinSession()}
                 disabled={!displayName.trim()}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold text-sm shadow-lg shadow-indigo-500/25 disabled:opacity-50 transition-all min-h-[48px]"
+                className="w-full py-3.5 rounded-xl bg-[#4682B4] hover:bg-[#3b6f9a] text-white font-bold text-sm shadow-md shadow-[#4682B4]/20 disabled:opacity-50 transition-all min-h-[48px]"
               >
                 Join Live Room
               </button>
@@ -414,68 +430,75 @@ function ParticipantPlayContent() {
         {/* STAGE 3: WAITING ROOM */}
         {stage === 'waiting' && session && (
           <div className="my-auto space-y-6 text-center animate-in fade-in duration-200">
-            <div className="w-20 h-20 rounded-3xl bg-indigo-600/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mx-auto relative">
-              <Sparkles className="w-10 h-10 animate-pulse text-emerald-400" />
+            <div className="w-20 h-20 rounded-3xl bg-[#4682B4]/10 border border-[#4682B4]/20 flex items-center justify-center text-[#4682B4] mx-auto relative shadow-xs">
+              <Sparkles className="w-10 h-10 animate-pulse text-[#6DC082]" />
               <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#6DC082] opacity-75" />
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-[#6DC082]" />
               </span>
             </div>
 
             <div>
-              <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-widest">
+              <span className="text-[11px] font-bold text-[#2e7d32] uppercase tracking-widest">
                 Connected & Ready
               </span>
-              <h2 className="text-xl sm:text-2xl font-bold text-white mt-1">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mt-1">
                 {session.title}
               </h2>
-              <p className="text-xs text-slate-400 mt-2">
-                Facilitator: {session.group?.client_name} ({session.group?.group_name})
+              <p className="text-xs text-slate-500 mt-2">
+                {session.client_name} • Cohort {session.cohort_number}
               </p>
             </div>
 
             {session.facilitator_instructions && (
-              <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-xs text-indigo-200/90 leading-relaxed font-medium">
+              <div className="p-4 rounded-2xl bg-white border border-[#D5E3EF] text-xs text-slate-700 leading-relaxed font-medium shadow-xs">
                 &ldquo;{session.facilitator_instructions}&rdquo;
               </div>
             )}
 
-            <div className="p-4 rounded-2xl bg-indigo-950/20 border border-indigo-500/20 text-xs text-slate-300">
-              <span className="text-emerald-400 font-bold">Tip: </span>
-              Have your physical or digital Learner Guide open! Questions are framed to challenge your guide navigation skills.
+            <div className="p-4 rounded-2xl bg-[#D5E3EF]/40 border border-[#D5E3EF] text-xs text-slate-700 text-left">
+              <span className="text-[#4682B4] font-bold">📖 Facilitation Tip: </span>
+              Have your physical or digital Learner Guide open! Questions are structured to reward authentic navigation of SOP headings.
             </div>
 
-            <p className="text-xs text-slate-500 italic animate-pulse">
-              Waiting for facilitator to start the first question...
+            <p className="text-xs text-slate-400 italic animate-pulse">
+              Waiting for facilitator to start the active question...
             </p>
           </div>
         )}
 
-        {/* STAGE 4: ACTIVE QUESTION (Blind Review) */}
+        {/* STAGE 4: ACTIVE QUESTION (Blind Review Answering State) */}
         {stage === 'active' && session && currentQ && (
           <div className="flex-1 flex flex-col justify-between py-2 space-y-4 animate-in fade-in duration-150">
             {/* Top Learner Guide Prompt Banner */}
-            <div className="p-3 rounded-xl bg-gradient-to-r from-amber-500/15 via-indigo-500/15 to-emerald-500/15 border border-indigo-500/30 flex items-center justify-between gap-2 shadow">
-              <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
-                <BookOpen className="w-4 h-4 text-emerald-400 shrink-0" />
+            <div className="p-3 rounded-xl bg-gradient-to-r from-amber-500/10 via-[#4682B4]/10 to-[#6DC082]/10 border border-[#4682B4]/30 flex items-center justify-between gap-2 shadow-xs">
+              <div className="flex items-center gap-2 text-xs font-bold text-[#1e3a5f]">
+                <BookOpen className="w-4 h-4 text-[#4682B4] shrink-0" />
                 <span>📖 Look inside your Learner Guide for this answer!</span>
               </div>
             </div>
 
+            {/* Group Deliberation Cue */}
+            {session.entry_mode === 'group' && (
+              <div className="text-[11px] font-semibold text-[#2e7d32] bg-[#6DC082]/10 p-2 rounded-lg border border-[#6DC082]/20 text-center">
+                👥 Table Rule: Discuss and reach consensus before selecting your final answer!
+              </div>
+            )}
+
             {/* Question Stem */}
             <div className="space-y-1">
-              <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
                 <span>Question {activeQIndex + 1} of {session.questions?.length}</span>
-                <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-semibold">
+                <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold text-[10px]">
                   {currentQ.format}
                 </span>
               </div>
-              <h2 className="text-lg sm:text-xl font-bold text-white leading-snug">
+              <h2 className="text-base sm:text-lg font-bold text-slate-800 leading-snug">
                 {currentQ.body}
               </h2>
             </div>
 
-            {/* Options Choices / Word Cloud Input */}
+            {/* Options Choices / Word Cloud Input with Particify Tactile Buttons */}
             <div className="my-auto space-y-2.5">
               {currentQ.format === 'WORD_CLOUD' ? (
                 <form onSubmit={handleWordSubmit} className="space-y-3">
@@ -484,11 +507,11 @@ function ParticipantPlayContent() {
                     value={wordSubmission}
                     onChange={(e) => setWordSubmission(e.target.value)}
                     placeholder="Enter your key word or term..."
-                    className="w-full px-4 py-3.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 font-semibold focus:outline-none focus:border-indigo-500 min-h-[48px]"
+                    className="w-full px-4 py-3.5 rounded-xl bg-white border border-slate-300 text-slate-800 placeholder-slate-400 font-semibold focus:outline-none focus:border-[#4682B4] min-h-[48px] shadow-xs"
                   />
                   <button
                     type="submit"
-                    className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 min-h-[48px]"
+                    className="w-full py-3.5 rounded-xl bg-[#4682B4] hover:bg-[#3b6f9a] text-white font-bold text-sm shadow-md shadow-[#4682B4]/20 flex items-center justify-center gap-2 min-h-[48px]"
                   >
                     <Send className="w-4 h-4" />
                     <span>Submit to Word Cloud</span>
@@ -498,201 +521,201 @@ function ParticipantPlayContent() {
                 <div className="space-y-2.5">
                   {currentQ.options.map((opt, idx) => {
                     const isSelected = selectedChoices.includes(idx);
+                    const letter = String.fromCharCode(65 + idx);
+
                     return (
                       <button
                         key={idx}
                         type="button"
-                        onClick={() => handleToggleOption(idx)}
-                        className={`w-full p-4 rounded-2xl border text-left font-semibold text-sm transition-all flex items-center justify-between gap-3 min-h-[56px] active:scale-[0.98] ${
+                        onClick={() => handleSelectOption(idx)}
+                        disabled={session.status === 'question_locked'}
+                        className={`w-full p-4 rounded-xl border text-left flex items-start gap-3 transition-all min-h-[56px] ${
                           isSelected
-                            ? 'bg-indigo-600/30 border-indigo-400 text-white shadow-lg shadow-indigo-500/10 ring-2 ring-indigo-500/50'
-                            : 'bg-slate-900/90 border-slate-800 text-slate-200 hover:border-slate-700'
+                            ? 'bg-[#4682B4] text-white border-[#4682B4] shadow-md ring-2 ring-[#4682B4]/30'
+                            : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-xs'
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                              isSelected ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'
-                            }`}
-                          >
-                            {String.fromCharCode(65 + idx)}
-                          </span>
-                          <span>{opt}</span>
-                        </div>
-                        {isSelected && <CheckCircle2 className="w-5 h-5 text-indigo-400 shrink-0" />}
+                        <span
+                          className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 ${
+                            isSelected
+                              ? 'bg-white text-[#4682B4]'
+                              : 'bg-slate-100 text-slate-700 border border-slate-300'
+                          }`}
+                        >
+                          {letter}
+                        </span>
+                        <span className="font-semibold text-sm leading-snug pt-0.5">
+                          {opt}
+                        </span>
                       </button>
                     );
                   })}
                 </div>
               )}
+
+              {/* Optimistic Playful Nudge upon answer selection */}
+              {justSubmittedFeedback && (
+                <div className="p-3 bg-[#6DC082]/15 border border-[#6DC082]/30 rounded-xl text-center animate-in fade-in slide-in-from-top-2 duration-200">
+                  <p className="text-xs font-bold text-[#2e7d32]">
+                    &quot;Submitted, was the learner guide used in this answer? I wonder :-)&quot;
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    You can change your choice freely until the timer ends or facilitator locks.
+                  </p>
+                </div>
+              )}
+
+              {/* Active Waiting Nudge */}
+              {selectedChoices.length > 0 && !justSubmittedFeedback && (
+                <div className="p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-center">
+                  <p className="text-[11px] text-slate-600 font-medium">
+                    ✅ Choice logged! While waiting: Check your Learner Guide index for the exact heading.
+                  </p>
+                </div>
+              )}
             </div>
 
-            {/* Playful Confirmation Message & Next Question in Self-Paced Mode */}
-            {justSubmittedFeedback && (
-              <div className="space-y-3">
-                <div className="p-3.5 rounded-xl bg-indigo-950/60 border border-indigo-500/30 text-center animate-in fade-in slide-in-from-bottom-2">
-                  <p className="text-xs font-semibold text-emerald-300">
-                    Submitted, was the learner guide used in this answer? I wonder :-)
-                  </p>
-                  {isSelfPaced && currentQ.additional_text && (
-                    <div className="mt-2.5 text-left p-3 rounded-lg bg-slate-900/90 border border-slate-800 text-xs text-slate-300">
-                      <span className="font-bold text-indigo-400 flex items-center gap-1 text-[11px] mb-1">
-                        <BookOpen className="w-3.5 h-3.5 text-emerald-400" /> Learner Guide Rationale:
-                      </span>
-                      <p className="leading-relaxed">{currentQ.additional_text}</p>
-                    </div>
-                  )}
-                  {!isSelfPaced && (
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      You can change your selection freely before the facilitator locks.
-                    </p>
-                  )}
-                </div>
-
-                {isSelfPaced && (
-                  <button
-                    type="button"
-                    onClick={handleSelfPacedNextQuestion}
-                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all min-h-[48px]"
-                  >
-                    <span>
-                      {activeQIndex + 1 < (session.questions?.length || 0)
-                        ? `Next Question (${activeQIndex + 2}/${session.questions?.length}) →`
-                        : 'Finish Quiz & View Results 🎉'}
-                    </span>
-                  </button>
-                )}
-              </div>
-            )}
+            {/* Bottom Status Indicator */}
+            <div className="pt-2 text-center text-xs text-slate-500">
+              {session.status === 'question_locked' ? (
+                <span className="text-amber-600 font-bold">Submissions Locked by Facilitator</span>
+              ) : (
+                <span>Submissions open • Timer synced with classroom projector</span>
+              )}
+            </div>
           </div>
         )}
 
-        {/* STAGE 5: REVEALED RESULTS */}
+        {/* STAGE 5: REVEAL SCREEN */}
         {stage === 'revealed' && session && currentQ && (
-          <div className="flex-1 flex flex-col justify-between py-2 space-y-4 animate-in fade-in duration-200">
-            {/* Result Badge */}
+          <div className="my-auto space-y-4 animate-in fade-in duration-200">
+            {/* Score & Correctness Header */}
             {currentQ.format !== 'WORD_CLOUD' && currentResponse && (
               <div
-                className={`p-4 rounded-2xl border flex items-center gap-3 ${
+                className={`p-4 rounded-2xl border text-center shadow-xs ${
                   currentResponse.is_correct
-                    ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300'
-                    : 'bg-amber-950/40 border-amber-500/50 text-amber-300'
+                    ? 'bg-[#6DC082]/15 border-[#6DC082]/40 text-[#2b773f]'
+                    : 'bg-red-50 border-red-200 text-red-800'
                 }`}
               >
-                {currentResponse.is_correct ? (
-                  <CheckCircle2 className="w-8 h-8 text-emerald-400 shrink-0" />
-                ) : (
-                  <AlertCircle className="w-8 h-8 text-amber-400 shrink-0" />
-                )}
-                <div>
-                  <h3 className="font-bold text-base">
-                    {currentResponse.is_correct ? 'Correct! Well Done!' : 'Check your Learner Guide!'}
-                  </h3>
-                  <p className="text-xs opacity-90">
-                    {currentResponse.is_correct
-                      ? `Awarded ${currentResponse.points_awarded} points!`
-                      : 'Keep your guide open for the next question.'}
-                  </p>
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  {currentResponse.is_correct ? (
+                    <>
+                      <CheckCircle2 className="w-5 h-5 text-[#6DC082]" />
+                      <span className="text-base font-black">Correct Answer!</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-5 h-5 text-red-500" />
+                      <span className="text-base font-black">Incorrect Choice</span>
+                    </>
+                  )}
                 </div>
+                <p className="text-xs font-bold">
+                  +{currentResponse.points_awarded} Points Awarded
+                </p>
               </div>
             )}
 
-            {/* Question Stem */}
-            <div>
-              <span className="text-xs font-semibold text-slate-400">Question Stem</span>
-              <h2 className="text-base sm:text-lg font-bold text-white mt-0.5">
-                {currentQ.body}
-              </h2>
-            </div>
-
-            {/* Revealed Choices with Correct Highlight */}
+            {/* Correct Option Highlighting */}
             {currentQ.format !== 'WORD_CLOUD' && (
               <div className="space-y-2">
+                <span className="text-xs font-bold text-slate-600 uppercase tracking-wider block">
+                  Answer Breakdown:
+                </span>
                 {currentQ.options.map((opt, idx) => {
                   const isCorrect = currentQ.correct_options.includes(idx);
-                  const isMySelection = selectedChoices.includes(idx);
+                  const isUserSelection = selectedChoices.includes(idx);
+
+                  let borderClass = 'border-slate-200 bg-white text-slate-500';
+                  if (isCorrect) {
+                    borderClass = 'border-[#6DC082] bg-[#6DC082]/10 text-slate-900 font-bold';
+                  } else if (isUserSelection && !isCorrect) {
+                    borderClass = 'border-red-300 bg-red-50 text-red-700 line-through';
+                  }
 
                   return (
                     <div
                       key={idx}
-                      className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-semibold ${
-                        isCorrect
-                          ? 'bg-emerald-950/50 border-emerald-500 text-emerald-200 font-bold'
-                          : isMySelection
-                          ? 'bg-red-950/30 border-red-500/40 text-red-200'
-                          : 'bg-slate-900/60 border-slate-800 text-slate-400 opacity-60'
-                      }`}
+                      className={`p-3 rounded-xl border text-xs flex items-center justify-between ${borderClass}`}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <span
-                          className={`w-6 h-6 rounded flex items-center justify-center text-xs ${
-                            isCorrect ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-400'
-                          }`}
-                        >
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-lg font-bold flex items-center justify-center text-xs bg-slate-100 text-slate-700">
                           {String.fromCharCode(65 + idx)}
                         </span>
                         <span>{opt}</span>
                       </div>
-                      {isCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+                      {isCorrect && (
+                        <span className="text-[10px] font-bold text-[#2e7d32] bg-[#6DC082]/20 px-2 py-0.5 rounded-full">
+                          Correct
+                        </span>
+                      )}
                     </div>
                   );
                 })}
               </div>
             )}
 
-            {/* Explanation / Additional Text */}
+            {/* Learner Guide Workplace Rationale Card */}
             {currentQ.additional_text && (
-              <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 space-y-1">
-                <span className="font-bold text-indigo-400 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
-                  <BookOpen className="w-3.5 h-3.5" /> Learner Guide Rationale
-                </span>
-                <p className="leading-relaxed">{currentQ.additional_text}</p>
+              <div className="p-4 rounded-2xl bg-white border border-[#D5E3EF] shadow-xs space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[#4682B4] uppercase tracking-wider">
+                  <BookOpen className="w-4 h-4 text-[#6DC082]" />
+                  <span>Workplace Rationale & Debrief:</span>
+                </div>
+                <p className="text-xs text-slate-700 leading-relaxed">
+                  {currentQ.additional_text}
+                </p>
               </div>
             )}
 
-            <p className="text-center text-xs text-slate-500 italic py-2 animate-pulse">
-              Waiting for facilitator to move to next question...
+            <p className="text-xs text-slate-400 italic text-center animate-pulse pt-2">
+              Waiting for facilitator to proceed to the next question...
             </p>
           </div>
         )}
 
-        {/* STAGE 6: COMPLETED SESSION */}
-        {stage === 'completed' && (
-          <div className="my-auto space-y-6 text-center animate-in fade-in duration-200">
-            <div className="w-16 h-16 rounded-3xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto shadow-xl">
-              <Trophy className="w-8 h-8" />
+        {/* STAGE 6: SESSION COMPLETED */}
+        {stage === 'completed' && participant && (
+          <div className="my-auto space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-20 h-20 rounded-3xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-500 mx-auto shadow-sm">
+              <Trophy className="w-10 h-10 animate-bounce" />
             </div>
 
             <div>
-              <h2 className="text-2xl font-black text-white">Quiz Completed!</h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Thank you for participating! Check the facilitator screen for the podium awards.
+              <h1 className="text-2xl font-black text-slate-800">Training Session Complete!</h1>
+              <p className="text-xs text-slate-500 mt-1">
+                Outstanding participation. Your final score has been logged.
               </p>
             </div>
 
-            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 max-w-xs mx-auto">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Total Score
+            <div className="p-6 rounded-2xl bg-white border border-[#D5E3EF] shadow-sm max-w-xs mx-auto">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                Final Score
               </span>
-              <p className="text-4xl font-mono font-black text-emerald-400 mt-1">
-                {participant?.score || 0} pts
-              </p>
+              <div className="text-4xl font-mono font-black text-[#4682B4] mt-1">
+                {participant.score} pts
+              </div>
+              <span className="text-xs font-semibold text-slate-600 block mt-1">
+                {participant.display_name}
+              </span>
             </div>
 
-            <p className="text-[11px] text-slate-500">
-              Shared device cache has been cleared for the next group cohort.
+            <p className="text-[11px] text-slate-400">
+              Shared tablet cache cleared. Device ready for the next cohort.
             </p>
           </div>
         )}
+
       </main>
     </div>
   );
 }
 
-export default function ParticipantPlayPage() {
+export default function PlayPage() {
   return (
-    <React.Suspense fallback={<div className="min-h-screen bg-[#0b0f19] flex items-center justify-center text-white">Loading Live Room...</div>}>
+    <Suspense fallback={<div className="p-8 text-center text-slate-500">Loading Session...</div>}>
       <ParticipantPlayContent />
-    </React.Suspense>
+    </Suspense>
   );
 }

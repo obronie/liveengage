@@ -1,17 +1,16 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { AppStore } from '@/lib/store';
-import { Course, Question, Session, SessionEntryMode, QuestionFormat } from '@/types';
+import { Course, CourseCluster, QuestionSet, Question, Session, SessionEntryMode, QuestionFormat } from '@/types';
 import { 
   Sparkles, 
   Play, 
   Plus, 
   Trash2, 
   Clock, 
-  HelpCircle, 
   Layers, 
   CheckCircle2, 
   Users, 
@@ -19,10 +18,10 @@ import {
   Building2, 
   BookOpen, 
   ArrowRight,
-  RefreshCw,
-  Sliders,
-  Radio,
   FileQuestion,
+  Tag,
+  Save,
+  Check,
   ChevronDown
 } from 'lucide-react';
 
@@ -31,98 +30,131 @@ function SessionBuilderContent() {
   const searchParams = useSearchParams();
   const preselectedCourseId = searchParams.get('courseId');
 
+  // Hierarchy Selection State
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
+  const [clusters, setClusters] = useState<CourseCluster[]>([]);
+  const [selectedClusterId, setSelectedClusterId] = useState<string>('');
+  const [questionSets, setQuestionSets] = useState<QuestionSet[]>([]);
+  const [selectedSetId, setSelectedSetId] = useState<string>('');
+
+  // Session Config State
   const [clientName, setClientName] = useState('Spur Corporation');
-  const [groupName, setGroupName] = useState('Group 1');
+  const [cohortNumber, setCohortNumber] = useState<number>(1); // Clean numbers 1 to 10
   const [sessionTitle, setSessionTitle] = useState('Cluster 2.4 - Warehouse Housekeeping & Safety');
   const [entryMode, setEntryMode] = useState<SessionEntryMode>('group');
-  const [pacingMode, setPacingMode] = useState<'waiting_screen' | 'start_now'>('waiting_screen');
+  const [facilitatorNotes, setFacilitatorNotes] = useState('Refer to your Learner Guide during answering. Deliberate with your table before locking in.');
 
-  // AI Generator state
-  const [aiPrompt, setAiPrompt] = useState('Generate 4 practical scenario questions on warehouse housekeeping, chemical spills, and PPE requirements');
-  const [questionCount, setQuestionCount] = useState(4);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-
-  // Questions Review Grid
+  // Editable Questions Grid
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLaunching, setIsLaunching] = useState(false);
-
-  // Active Sessions
-  const [pastSessions, setPastSessions] = useState<Session[]>([]);
+  const [saveFeedback, setSaveFeedback] = useState(false);
 
   useEffect(() => {
-    loadInitialData();
-  }, []);
+    router.replace('/courses');
+  }, [router]);
 
   const loadInitialData = async () => {
     const loadedCourses = await AppStore.fetchCourses();
     setCourses(loadedCourses);
     
+    let course = loadedCourses[0];
     if (preselectedCourseId && loadedCourses.some(c => c.id === preselectedCourseId)) {
-      setSelectedCourseId(preselectedCourseId);
-      const target = loadedCourses.find(c => c.id === preselectedCourseId);
-      if (target) {
-        setSessionTitle(`${target.code} - ${target.title}`);
-      }
-    } else if (loadedCourses.length > 0) {
-      setSelectedCourseId(loadedCourses[0].id);
-      setSessionTitle(`${loadedCourses[0].code} - ${loadedCourses[0].title}`);
+      course = loadedCourses.find(c => c.id === preselectedCourseId)!;
     }
 
-    const sessions = AppStore.getSessions();
-    setPastSessions(sessions);
-
-    // Initial default question set if none exist
-    if (questions.length === 0) {
-      handleGenerateAI(true);
+    if (course) {
+      setSelectedCourseId(course.id);
+      loadClustersForCourse(course.id);
     }
   };
 
-  const handleGenerateAI = async (initialRun = false) => {
-    setIsGenerating(true);
-    setAiError(null);
-
-    try {
-      const selectedCourse = courses.find(c => c.id === selectedCourseId);
-      const courseContext = selectedCourse?.documents?.map(d => `${d.file_name}:\n${d.extracted_text}`).join('\n\n') || '';
-
-      const localGeminiKey = typeof window !== 'undefined' ? localStorage.getItem('liveengage_gemini_key') || '' : '';
-
-      const res = await fetch('/api/generate-questions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: aiPrompt,
-          courseContext,
-          questionCount: initialRun ? 4 : questionCount,
-          apiKey: localGeminiKey,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to generate questions');
-
-      const mapped: Question[] = data.questions.map((q: any, idx: number) => ({
-        id: 'q-' + Math.random().toString(36).substring(2, 9),
-        question_order: idx + 1,
-        format: q.format as QuestionFormat,
-        body: q.body,
-        additional_text: q.additionalText,
-        options: q.options || [],
-        correct_options: q.correctOptions || [0],
-        duration: q.duration || 45,
-        guide_topic_hint: q.guideTopicHint || '',
-      }));
-
-      setQuestions(mapped);
-    } catch (err: any) {
-      console.error(err);
-      setAiError(err.message);
-    } finally {
-      setIsGenerating(false);
+  const loadClustersForCourse = (courseId: string) => {
+    const loadedClusters = AppStore.getClusters(courseId);
+    setClusters(loadedClusters);
+    if (loadedClusters.length > 0) {
+      const cluster = loadedClusters[0];
+      setSelectedClusterId(cluster.id);
+      loadQuestionSetsForCluster(cluster.id);
+    } else {
+      setSelectedClusterId('');
+      setQuestionSets([]);
+      setSelectedSetId('');
+      setQuestions([]);
     }
+  };
+
+  const loadQuestionSetsForCluster = (clusterId: string, currentClusters?: CourseCluster[]) => {
+    const sets = AppStore.getQuestionSets(clusterId);
+    setQuestionSets(sets);
+    const activeClusters = currentClusters || clusters;
+    const cluster = activeClusters.find(c => c.id === clusterId);
+    const clusterLabel = cluster ? `Cluster ${cluster.cluster_number}` : 'Cluster 2.4';
+
+    if (sets.length > 0) {
+      const qSet = sets[0];
+      setSelectedSetId(qSet.id);
+      if (qSet.is_custom) {
+        setSessionTitle(qSet.title.startsWith('Cluster') ? qSet.title : `${clusterLabel} - ${qSet.title}`);
+      } else {
+        setSessionTitle(clusterLabel);
+      }
+      setEntryMode(qSet.default_entry_mode || 'group');
+      setQuestions(qSet.questions || []);
+    } else {
+      setSelectedSetId('');
+      setQuestions([]);
+    }
+  };
+
+  const handleCourseChange = (courseId: string) => {
+    setSelectedCourseId(courseId);
+    loadClustersForCourse(courseId);
+  };
+
+  const handleClusterChange = (clusterId: string) => {
+    setSelectedClusterId(clusterId);
+    loadQuestionSetsForCluster(clusterId);
+  };
+
+  const handleQuestionSetChange = (setId: string) => {
+    setSelectedSetId(setId);
+    const qSet = questionSets.find(s => s.id === setId);
+    const cluster = clusters.find(c => c.id === selectedClusterId);
+    const clusterLabel = cluster ? `Cluster ${cluster.cluster_number}` : 'Cluster 2.4';
+
+    if (qSet) {
+      if (qSet.is_custom) {
+        setSessionTitle(qSet.title.startsWith('Cluster') ? qSet.title : `${clusterLabel} - ${qSet.title}`);
+      } else {
+        setSessionTitle(clusterLabel);
+      }
+      setEntryMode(qSet.default_entry_mode || 'group');
+      setQuestions(qSet.questions || []);
+    }
+  };
+
+  // --- Questions Grid Handlers ---
+  const handleUpdateQuestion = (index: number, updated: Partial<Question>) => {
+    const updatedList = [...questions];
+    updatedList[index] = { ...updatedList[index], ...updated };
+    setQuestions(updatedList);
+  };
+
+  const handleToggleCorrectOption = (qIndex: number, optIndex: number) => {
+    const q = questions[qIndex];
+    let correct = [...q.correct_options];
+
+    if (q.format === 'MCQ' || q.format === 'BINARY') {
+      correct = [optIndex];
+    } else {
+      if (correct.includes(optIndex)) {
+        correct = correct.filter(i => i !== optIndex);
+      } else {
+        correct.push(optIndex);
+      }
+    }
+    handleUpdateQuestion(qIndex, { correct_options: correct });
   };
 
   const handleAddBlankQuestion = (format: QuestionFormat = 'MCQ') => {
@@ -131,7 +163,7 @@ function SessionBuilderContent() {
       question_order: questions.length + 1,
       format,
       body: 'According to your Learner Guide, ...',
-      additional_text: 'Learner Guide explanation and workplace application.',
+      additional_text: 'Learner Guide explanation and practical workplace application.',
       options: format === 'WORD_CLOUD' ? [] : ['Option A', 'Option B', 'Option C', 'Option D'],
       correct_options: format === 'WORD_CLOUD' ? [] : [0],
       duration: 45,
@@ -140,606 +172,434 @@ function SessionBuilderContent() {
     setQuestions([...questions, newQ]);
   };
 
-  const handleUpdateQuestion = (index: number, updated: Partial<Question>) => {
-    const updatedList = [...questions];
-    updatedList[index] = { ...updatedList[index], ...updated };
-    setQuestions(updatedList);
-  };
-
   const handleDeleteQuestion = (index: number) => {
     const updated = questions.filter((_, i) => i !== index).map((q, i) => ({ ...q, question_order: i + 1 }));
     setQuestions(updated);
   };
 
-  const handleToggleCorrectOption = (qIndex: number, optIndex: number) => {
-    const q = questions[qIndex];
-    let newCorrect: number[] = [];
-
-    if (q.format === 'MCQ' || q.format === 'BINARY') {
-      newCorrect = [optIndex];
-    } else {
-      if (q.correct_options.includes(optIndex)) {
-        newCorrect = q.correct_options.filter(i => i !== optIndex);
-      } else {
-        newCorrect = [...q.correct_options, optIndex].sort((a, b) => a - b);
-      }
+  // Save changes to current question set
+  const handleSaveToQuestionBank = async () => {
+    if (!selectedSetId) return;
+    const currentSet = questionSets.find(s => s.id === selectedSetId);
+    if (currentSet) {
+      const updatedSet: QuestionSet = {
+        ...currentSet,
+        title: sessionTitle,
+        default_entry_mode: entryMode,
+        questions,
+        updated_at: new Date().toISOString(),
+      };
+      await AppStore.saveQuestionSet(updatedSet);
+      setSaveFeedback(true);
+      setTimeout(() => setSaveFeedback(false), 2000);
     }
-    handleUpdateQuestion(qIndex, { correct_options: newCorrect });
   };
 
-  const handleUpdateOptionText = (qIndex: number, optIndex: number, text: string) => {
-    const q = questions[qIndex];
-    const newOptions = [...q.options];
-    newOptions[optIndex] = text;
-    handleUpdateQuestion(qIndex, { options: newOptions });
-  };
-
-  const handleAddOption = (qIndex: number) => {
-    const q = questions[qIndex];
-    const newOptions = [...q.options, `Option ${String.fromCharCode(65 + q.options.length)}`];
-    handleUpdateQuestion(qIndex, { options: newOptions });
-  };
-
-  const handleRemoveOption = (qIndex: number, optIndex: number) => {
-    const q = questions[qIndex];
-    const newOptions = q.options.filter((_, i) => i !== optIndex);
-    const newCorrect = q.correct_options
-      .filter(i => i !== optIndex)
-      .map(i => (i > optIndex ? i - 1 : i));
-    handleUpdateQuestion(qIndex, { options: newOptions, correct_options: newCorrect });
-  };
-
+  // --- Launch Live Session ---
   const handleLaunchSession = async () => {
     if (questions.length === 0) {
-      alert('Please add or generate at least one question before launching.');
+      alert('Please add at least one question before launching.');
       return;
     }
 
     setIsLaunching(true);
-    // Generate clean 6-digit room code
-    const roomCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    const newSession: Session = {
-      id: 'sess-' + Math.random().toString(36).substring(2, 9),
-      course_id: selectedCourseId || null,
-      title: sessionTitle || 'Live Classroom Poll',
-      room_code: roomCode,
-      entry_mode: entryMode,
-      status: pacingMode === 'start_now' ? 'question_active' : 'lobby',
-      pacing_mode: pacingMode,
-      current_question_index: 0,
-      facilitator_instructions: pacingMode === 'start_now'
-        ? 'Self-paced session: Answer each question at your own pace.'
-        : 'Waiting for facilitator to start...',
-      created_at: new Date().toISOString(),
-      group: {
-        id: 'grp-' + Math.random().toString(36).substring(2, 9),
-        client_name: clientName,
-        group_name: groupName,
+    try {
+      const roomCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+      const newSession: Session = {
+        id: 'sess-' + Math.random().toString(36).substring(2, 9),
+        course_id: selectedCourseId,
+        cluster_id: selectedClusterId,
+        question_set_id: selectedSetId,
+        title: sessionTitle.trim() || 'Live Facilitation Session',
+        room_code: roomCode,
+        client_name: clientName.trim(),
+        cohort_number: cohortNumber,
+        entry_mode: entryMode,
+        status: 'lobby',
+        current_question_index: 0,
+        facilitator_instructions: facilitatorNotes,
         created_at: new Date().toISOString(),
-      },
-      questions: questions.map((q, idx) => ({ ...q, question_order: idx + 1 })),
-      participants: [],
-    };
+        questions: questions.map((q, idx) => ({ ...q, question_order: idx + 1 })),
+      };
 
-    await AppStore.saveSession(newSession);
-    router.push(`/presenter/${roomCode}`);
+      await AppStore.saveSession(newSession);
+      router.push(`/presenter/${roomCode}`);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to launch session');
+      setIsLaunching(false);
+    }
   };
 
+  const currentSet = questionSets.find(s => s.id === selectedSetId);
+
   return (
-    <div className="min-h-screen flex flex-col bg-[#0b0f19]">
+    <div className="min-h-screen flex flex-col bg-[#F1F9F3]">
       <Navbar />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Top Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+        {/* Page Banner */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
-            <div className="flex items-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
-              <Sparkles className="w-4 h-4 text-emerald-400" />
-              <span>Facilitator Mission Control</span>
+            <div className="flex items-center gap-2 text-xs font-semibold text-[#4682B4] uppercase tracking-wider mb-1">
+              <Sparkles className="w-4 h-4" />
+              <span>Session Setup & Question Bank Launcher</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-              Session Builder & Live Quiz Architect
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">
+              Facilitator Session Builder
             </h1>
-            <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-              Construct high-engagement sessions in seconds with Google Gemini AI. Every question is calibrated for learner guide navigation and team debate.
+            <p className="text-sm text-slate-600 mt-0.5">
+              Select your Course, Cluster, and Question Set to launch live classroom polls with instant PIN and QR code access.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSaveToQuestionBank}
+              className="px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+            >
+              <Save className="w-3.5 h-3.5 text-slate-500" />
+              <span>{saveFeedback ? 'Saved to Bank!' : 'Save to Bank'}</span>
+            </button>
+
             <button
               onClick={handleLaunchSession}
               disabled={isLaunching || questions.length === 0}
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 flex items-center gap-2 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+              className="px-5 py-2.5 bg-[#4682B4] hover:bg-[#3b6f9a] text-white text-sm font-bold rounded-xl shadow-md shadow-[#4682B4]/20 transition-all flex items-center gap-2"
             >
-              <Play className="w-4 h-4 fill-current" />
-              <span>Launch Live Room & Projector View</span>
+              <Play className="w-4 h-4" />
+              <span>{isLaunching ? 'Initializing Room...' : 'Launch Live Room'}</span>
             </button>
           </div>
         </div>
 
-        {/* Configuration Bar */}
-        <div className="mt-6 p-6 rounded-2xl bg-slate-900/80 border border-slate-800/80 shadow-xl space-y-6">
-          <div className="flex items-center gap-2 pb-3 border-b border-slate-800 text-xs font-semibold uppercase tracking-wider text-slate-400">
-            <Sliders className="w-4 h-4 text-indigo-400" />
-            <span>Session Metadata & Cohort Configuration</span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Course Selector */}
+        {/* Configuration Matrix (Course -> Cluster -> Question Set -> Client & Cohort) */}
+        <div className="bg-white border border-[#D5E3EF] rounded-2xl p-6 shadow-xs mb-8 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-4 border-b border-slate-100">
+            {/* 1. Select Course */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Course</span>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5 text-[#4682B4]" />
+                1. Course Container
               </label>
               <select
                 value={selectedCourseId}
-                onChange={(e) => {
-                  setSelectedCourseId(e.target.value);
-                  const c = courses.find(item => item.id === e.target.value);
-                  if (c) setSessionTitle(`${c.code} - ${c.title}`);
-                }}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-medium text-white focus:outline-none focus:border-indigo-500"
+                onChange={(e) => handleCourseChange(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl text-slate-800 font-medium focus:outline-none focus:border-[#4682B4]"
               >
-                {courses.map((course) => (
-                  <option key={course.id} value={course.id}>
-                    [{course.code}] {course.title}
+                {courses.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.code} - {c.title}
                   </option>
                 ))}
-                <option value="">Ad-hoc / Scratchpad (No course documents)</option>
               </select>
             </div>
 
-            {/* Client Name */}
+            {/* 2. Select Cluster */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Client / Organization</span>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-[#4682B4]" />
+                2. Cluster Topic
+              </label>
+              <select
+                value={selectedClusterId}
+                onChange={(e) => handleClusterChange(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl text-slate-800 font-medium focus:outline-none focus:border-[#4682B4]"
+              >
+                {clusters.map(cl => (
+                  <option key={cl.id} value={cl.id}>
+                    Cluster {cl.cluster_number} - {cl.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 3. Select Question Set (Multi-Bank) */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <FileQuestion className="w-3.5 h-3.5 text-[#4682B4]" />
+                3. Question Set
+              </label>
+              <select
+                value={selectedSetId}
+                onChange={(e) => handleQuestionSetChange(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl text-slate-800 font-medium focus:outline-none focus:border-[#4682B4]"
+              >
+                {questionSets.map(qs => (
+                  <option key={qs.id} value={qs.id}>
+                    {qs.title} ({qs.is_custom ? 'Custom' : 'Generic'})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Session Parameters: Client Name, Cohort (1-10), Entry Mode */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+            <div>
+              <label className="text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-[#4682B4]" />
+                Client / Company Name
               </label>
               <input
                 type="text"
                 value={clientName}
                 onChange={(e) => setClientName(e.target.value)}
-                placeholder="e.g. Spur Corp, Woolworths"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500"
+                placeholder="e.g. Spur Corporation"
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:border-[#4682B4]"
               />
             </div>
 
-            {/* Group (Only numbers 1-10) */}
+            {/* Cohort is just a number between 1 and 10 */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Group (Only numbers 1-10)</span>
+              <label className="text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5 text-[#4682B4]" />
+                Cohort (1 to 10)
               </label>
               <select
-                value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-medium text-white focus:outline-none focus:border-indigo-500 font-mono"
+                value={cohortNumber}
+                onChange={(e) => setCohortNumber(Number(e.target.value))}
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-[#4682B4] font-semibold text-slate-800"
               >
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                  <option key={num} value={`Group ${num}`}>
-                    Group {num}
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                  <option key={num} value={num}>
+                    Cohort {num}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Entry Mode Toggle */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Identity & Scoring Mode</span>
+              <label className="text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-[#4682B4]" />
+                Identity Mode
               </label>
-              <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+              <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200">
                 <button
                   type="button"
                   onClick={() => setEntryMode('group')}
-                  className={`py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                  className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
                     entryMode === 'group'
-                      ? 'bg-indigo-600 text-white shadow'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-white text-[#4682B4] shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <Users className="w-3.5 h-3.5" />
-                  <span>Group Tables</span>
+                  Table Groups
                 </button>
                 <button
                   type="button"
                   onClick={() => setEntryMode('individual')}
-                  className={`py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                  className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
                     entryMode === 'individual'
-                      ? 'bg-indigo-600 text-white shadow'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-white text-[#4682B4] shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <User className="w-3.5 h-3.5" />
-                  <span>Individual</span>
+                  Individuals
                 </button>
               </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
             <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+              <label className="text-xs font-semibold text-slate-700 mb-1 block">
                 Session Display Title
               </label>
               <input
                 type="text"
                 value={sessionTitle}
                 onChange={(e) => setSessionTitle(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:border-[#4682B4]"
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Waiting Screen or Start Now</span>
-              </label>
-              <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setPacingMode('waiting_screen')}
-                  className={`py-2 px-3 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                    pacingMode === 'waiting_screen'
-                      ? 'bg-indigo-600 text-white shadow'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <span>Waiting Screen</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPacingMode('start_now')}
-                  className={`py-2 px-3 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                    pacingMode === 'start_now'
-                      ? 'bg-indigo-600 text-white shadow'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <span>Start Now (Own Pace)</span>
-                </button>
-              </div>
-              <p className="text-[10px] text-slate-500 mt-1">
-                {pacingMode === 'waiting_screen'
-                  ? 'Learners hold on waiting screen until facilitator starts.'
-                  : 'Learner can start at own pace immediately upon joining.'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* AI Question Generator Section */}
-        <div className="mt-8 p-6 rounded-2xl bg-gradient-to-r from-indigo-950/40 via-purple-950/20 to-slate-900 border border-indigo-500/30 shadow-xl">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
-                <Sparkles className="w-5 h-5 text-indigo-300" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  Gemini AI Question Generator
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-mono">
-                    Structured Outputs
-                  </span>
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Interrogates ingested course documents with search prompts ("According to your Learner Guide...").
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-slate-400">Count:</label>
-                <select
-                  value={questionCount}
-                  onChange={(e) => setQuestionCount(Number(e.target.value))}
-                  className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white"
-                >
-                  <option value={3}>3 questions</option>
-                  <option value={4}>4 questions</option>
-                  <option value={5}>5 questions</option>
-                  <option value={7}>7 questions</option>
-                  <option value={10}>10 questions</option>
-                </select>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => handleGenerateAI(false)}
-                disabled={isGenerating}
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-lg shadow-indigo-600/30 flex items-center gap-2 transition-all disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isGenerating ? 'animate-spin' : ''}`} />
-                <span>{isGenerating ? 'Generating Questions...' : 'Generate with AI'}</span>
-              </button>
-            </div>
           </div>
 
-          <div className="mt-4">
-            <input
-              type="text"
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder="e.g. Generate 5 scenario MCQs on warehouse chemical spills from Module 2..."
-              className="w-full px-4 py-2.5 rounded-xl bg-slate-950/80 border border-indigo-500/30 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400 font-mono"
-            />
-          </div>
-
-          {aiError && (
-            <div className="mt-3 p-3 rounded-xl bg-red-950/50 border border-red-800 text-xs text-red-300">
-              {aiError}
+          {/* Context Notes Banner (If custom set) */}
+          {currentSet?.custom_background_context && (
+            <div className="p-3 bg-[#F1F9F3] border border-[#6DC082]/30 rounded-xl flex items-center gap-2 text-xs">
+              <span className="font-bold text-[#2e7d32]">Client Context:</span>
+              <span className="text-slate-700 italic">{currentSet.custom_background_context}</span>
             </div>
           )}
         </div>
 
-        {/* Questions In-App Review Grid */}
-        <div className="mt-8 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <span>Interactive Review Grid</span>
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                  {questions.length} {questions.length === 1 ? 'Question' : 'Questions'}
-                </span>
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Edit question stems, options, correct answers, durations, and guide search prompts before presenting.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => handleAddBlankQuestion('MCQ')}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add MCQ</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleAddBlankQuestion('WORD_CLOUD')}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Word Cloud</span>
-              </button>
-            </div>
+        {/* Questions Grid Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold text-slate-800">
+              Interactive Review Grid ({questions.length} Questions)
+            </h2>
+            <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-[#4682B4]/10 text-[#4682B4] border border-[#4682B4]/20">
+              {entryMode === 'group' ? '100 Flat Points (No speed rush)' : '100 Base + 10 Speed Bonus'}
+            </span>
           </div>
 
-          {/* Cards List */}
-          <div className="space-y-4">
-            {questions.map((q, qIdx) => (
-              <div
-                key={q.id}
-                className="p-6 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 transition-all shadow-lg space-y-4"
-              >
-                {/* Card Top: Order, Format, Timer, Delete */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
-                  <div className="flex items-center gap-3">
-                    <span className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 font-bold text-xs flex items-center justify-center border border-indigo-500/30">
-                      #{q.question_order}
-                    </span>
-
-                    {/* Format Dropdown */}
-                    <select
-                      value={q.format}
-                      onChange={(e) => {
-                        const newFormat = e.target.value as QuestionFormat;
-                        let opts = q.options;
-                        let correct = q.correct_options;
-                        if (newFormat === 'WORD_CLOUD') {
-                          opts = [];
-                          correct = [];
-                        } else if (newFormat === 'BINARY') {
-                          opts = ['True', 'False'];
-                          correct = [0];
-                        } else if (opts.length === 0) {
-                          opts = ['Option A', 'Option B', 'Option C', 'Option D'];
-                          correct = [0];
-                        }
-                        handleUpdateQuestion(qIdx, { format: newFormat, options: opts, correct_options: correct });
-                      }}
-                      className="px-3 py-1 rounded-lg bg-slate-800 border border-slate-700 text-xs font-semibold text-white focus:outline-none focus:border-indigo-500"
-                    >
-                      <option value="MCQ">Single Choice (MCQ)</option>
-                      <option value="MULTIPLE">Multiple Choice (Select all)</option>
-                      <option value="BINARY">Binary (True/False)</option>
-                      <option value="SCALE">Rating Scale (1–5)</option>
-                      <option value="WORD_CLOUD">Word Cloud (Open text)</option>
-                    </select>
-
-                    {/* Timer Dropdown */}
-                    <div className="flex items-center gap-1 text-slate-400">
-                      <Clock className="w-3.5 h-3.5" />
-                      <select
-                        value={q.duration}
-                        onChange={(e) => handleUpdateQuestion(qIdx, { duration: Number(e.target.value) })}
-                        className="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none"
-                      >
-                        <option value={30}>30s countdown</option>
-                        <option value={45}>45s countdown</option>
-                        <option value={60}>60s countdown</option>
-                        <option value={90}>90s countdown</option>
-                        <option value={120}>120s countdown</option>
-                        <option value={0}>Untimed (Manual facilitator lock)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => handleDeleteQuestion(qIdx)}
-                    className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                    title="Delete Question"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Question Stem Body */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                    Question Stem
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={q.body}
-                    onChange={(e) => handleUpdateQuestion(qIdx, { body: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-sm font-medium text-white focus:outline-none focus:border-indigo-500"
-                    placeholder="Enter question text..."
-                  />
-                </div>
-
-                {/* Options Section */}
-                {q.format !== 'WORD_CLOUD' ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                        Options (Click circle/box to set correct answer)
-                      </label>
-                      {q.format !== 'BINARY' && (
-                        <button
-                          type="button"
-                          onClick={() => handleAddOption(qIdx)}
-                          className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold"
-                        >
-                          + Add Option Choice
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                      {q.options.map((opt, optIdx) => {
-                        const isCorrect = q.correct_options.includes(optIdx);
-                        return (
-                          <div
-                            key={optIdx}
-                            className={`p-2.5 rounded-xl border flex items-center gap-2.5 transition-colors ${
-                              isCorrect
-                                ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
-                                : 'bg-slate-950/70 border-slate-800 text-slate-200'
-                            }`}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => handleToggleCorrectOption(qIdx, optIdx)}
-                              className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 transition-colors ${
-                                isCorrect
-                                  ? 'bg-emerald-500 text-white'
-                                  : 'bg-slate-800 text-slate-500 hover:bg-slate-700'
-                              }`}
-                              title={isCorrect ? 'Correct Option' : 'Mark as Correct'}
-                            >
-                              <CheckCircle2 className="w-4 h-4" />
-                            </button>
-
-                            <input
-                              type="text"
-                              value={opt}
-                              onChange={(e) => handleUpdateOptionText(qIdx, optIdx, e.target.value)}
-                              className="flex-1 bg-transparent border-0 text-xs font-medium text-white focus:outline-none"
-                            />
-
-                            {q.format !== 'BINARY' && q.options.length > 2 && (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveOption(qIdx, optIdx)}
-                                className="text-slate-500 hover:text-red-400 text-xs p-1"
-                                title="Remove Choice"
-                              >
-                                &times;
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-4 rounded-xl bg-slate-950/50 border border-dashed border-slate-800 text-xs text-slate-400">
-                    <span className="font-semibold text-indigo-300">Word Cloud Mode:</span> Learners submit open-ended keywords or short phrases. Submissions are dynamically aggregated and weighted on the Presenter display. Facilitators have a 1-click &quot;Click-to-Hide&quot; moderation tool.
-                  </div>
-                )}
-
-                {/* Additional Text / Reveal Explanation */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                      Learner Guide Topic Hint (Navigation prompt)
-                    </label>
-                    <input
-                      type="text"
-                      value={q.guide_topic_hint || ''}
-                      onChange={(e) => handleUpdateQuestion(qIdx, { guide_topic_hint: e.target.value })}
-                      placeholder="e.g. Module 2: Section 2.1 - Core Workplace Housekeeping"
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                      Explanation / Additional Text (Revealed after answers lock)
-                    </label>
-                    <input
-                      type="text"
-                      value={q.additional_text || ''}
-                      onChange={(e) => handleUpdateQuestion(qIdx, { additional_text: e.target.value })}
-                      placeholder="Rationale explained to participants upon reveal..."
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Bottom Launch Button */}
-          <div className="pt-6 flex justify-end">
+          <div className="flex items-center gap-2">
             <button
-              onClick={handleLaunchSession}
-              disabled={isLaunching || questions.length === 0}
-              className="px-8 py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-sm shadow-xl shadow-emerald-500/20 flex items-center gap-2.5 transition-all"
+              onClick={() => handleAddBlankQuestion('MCQ')}
+              className="px-3 py-1.5 text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg flex items-center gap-1 transition-colors"
             >
-              <Play className="w-5 h-5 fill-current" />
-              <span>Launch Live Session ({questions.length} Questions)</span>
+              <Plus className="w-3.5 h-3.5 text-[#4682B4]" />
+              <span>Add Question</span>
             </button>
           </div>
         </div>
 
-        {/* Saved Sessions Quick Access */}
-        {pastSessions.length > 0 && (
-          <div className="mt-12 pt-8 border-t border-slate-800">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-4">
-              Recently Created Sessions
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {pastSessions.slice(0, 3).map((sess) => (
-                <div
-                  key={sess.id}
-                  className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between"
-                >
-                  <div>
-                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400">
-                      PIN: {sess.room_code}
+        {/* Questions Cards */}
+        <div className="space-y-4">
+          {questions.map((q, qIndex) => {
+            const optionLetters = ['A', 'B', 'C', 'D', 'E'];
+            return (
+              <div
+                key={q.id || qIndex}
+                className="bg-white border border-[#D5E3EF] rounded-2xl p-5 shadow-xs space-y-4 hover:border-[#4682B4]/40 transition-colors"
+              >
+                {/* Header row: Number, Format, Timer, Delete */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-7 h-7 rounded-lg bg-[#4682B4] text-white text-xs font-bold flex items-center justify-center">
+                      {qIndex + 1}
                     </span>
-                    <h4 className="font-semibold text-white text-xs mt-1.5 line-clamp-1">{sess.title}</h4>
-                    <p className="text-[11px] text-slate-400">
-                      {sess.questions?.length || 0} questions • Mode: {sess.entry_mode}
-                    </p>
+                    <span className="text-[11px] font-bold text-[#1e3a5f] bg-[#4682B4]/15 px-2.5 py-1 rounded-md border border-[#4682B4]/25">
+                      {q.format === 'MCQ' && 'Single Choice (MCQ)'}
+                      {q.format === 'MULTIPLE' && 'Multiple Choice'}
+                      {q.format === 'BINARY' && 'True / False'}
+                      {q.format === 'SCALE' && 'Scale 1–5'}
+                      {q.format === 'WORD_CLOUD' && 'Word Cloud'}
+                    </span>
+
+                    <input
+                      type="text"
+                      value={q.guide_topic_hint || ''}
+                      onChange={(e) => handleUpdateQuestion(qIndex, { guide_topic_hint: e.target.value })}
+                      placeholder="Learner Guide SOP Topic Reference (e.g. Section 2.1)"
+                      className="text-xs text-slate-600 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#4682B4] focus:outline-none px-1"
+                    />
                   </div>
-                  <button
-                    onClick={() => router.push(`/presenter/${sess.room_code}`)}
-                    className="p-2 text-indigo-400 hover:text-white bg-indigo-600/10 hover:bg-indigo-600/20 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
-                  >
-                    <span>Open</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+                      <Clock className="w-3.5 h-3.5 text-[#4682B4]" />
+                      <select
+                        value={q.duration}
+                        onChange={(e) => handleUpdateQuestion(qIndex, { duration: Number(e.target.value) })}
+                        className="bg-transparent text-xs text-slate-700 font-semibold focus:outline-none"
+                      >
+                        <option value={0}>Untimed (Manual Lock)</option>
+                        <option value={30}>30s (Rapid)</option>
+                        <option value={45}>45s (Standard)</option>
+                        <option value={60}>60s (Detailed)</option>
+                        <option value={90}>90s (Complex Scenario)</option>
+                      </select>
+                    </div>
+
+                    <button
+                      onClick={() => handleDeleteQuestion(qIndex)}
+                      className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                      title="Delete question"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              ))}
-            </div>
+
+                {/* Question Stem */}
+                <div>
+                  <textarea
+                    value={q.body}
+                    onChange={(e) => handleUpdateQuestion(qIndex, { body: e.target.value })}
+                    rows={2}
+                    className="w-full text-sm font-medium text-slate-800 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:border-[#4682B4] focus:bg-white"
+                    placeholder="Question stem (prompts search in learner guide without explicit page numbers)..."
+                  />
+                </div>
+
+                {/* Options with Particify Tile Badges (A, B, C, D) in LearnBlended palette */}
+                {q.format !== 'WORD_CLOUD' && (
+                  <div className="space-y-2">
+                    {q.options.map((opt, optIndex) => {
+                      const isCorrect = q.correct_options.includes(optIndex);
+                      const letter = optionLetters[optIndex] || String(optIndex + 1);
+                      return (
+                        <div
+                          key={optIndex}
+                          className={`flex items-center gap-2.5 p-2 rounded-xl border text-xs transition-colors ${
+                            isCorrect 
+                              ? 'bg-[#6DC082]/10 border-[#6DC082]' 
+                              : 'bg-white border-slate-200'
+                          }`}
+                        >
+                          {/* Particify Tile Badge */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCorrectOption(qIndex, optIndex)}
+                            className={`w-7 h-7 rounded-lg font-bold flex items-center justify-center transition-colors text-xs ${
+                              isCorrect
+                                ? 'bg-[#6DC082] text-white shadow-xs'
+                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300'
+                            }`}
+                            title="Click to toggle as correct option"
+                          >
+                            {letter}
+                          </button>
+
+                          <input
+                            type="text"
+                            value={opt}
+                            onChange={(e) => {
+                              const options = [...q.options];
+                              options[optIndex] = e.target.value;
+                              handleUpdateQuestion(qIndex, { options });
+                            }}
+                            className="flex-1 bg-transparent text-xs text-slate-800 font-medium focus:outline-none"
+                          />
+
+                          {isCorrect && (
+                            <span className="text-[10px] font-bold text-[#2e7d32] px-2 py-0.5 rounded-full bg-[#6DC082]/20 border border-[#6DC082]/30">
+                              Correct Choice
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Debrief & Workplace Rationale */}
+                <div className="bg-[#D5E3EF]/30 p-3 rounded-xl border border-[#D5E3EF]">
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1 uppercase tracking-wider flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5 text-[#4682B4]" />
+                    Learner Guide Workplace Rationale & Debrief (Displayed on Reveal):
+                  </label>
+                  <textarea
+                    value={q.additional_text || ''}
+                    onChange={(e) => handleUpdateQuestion(qIndex, { additional_text: e.target.value })}
+                    rows={2}
+                    className="w-full text-xs text-slate-700 bg-white border border-slate-200 rounded-lg p-2 focus:outline-none focus:border-[#4682B4]"
+                    placeholder="Clear explanation of the correct answer and practical workplace context..."
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Bottom Launch Bar */}
+        <div className="mt-8 pt-4 border-t border-[#D5E3EF] flex items-center justify-between">
+          <div className="text-xs text-slate-500">
+            Cohort {cohortNumber} • {questions.length} Questions ready
           </div>
-        )}
+
+          <button
+            onClick={handleLaunchSession}
+            disabled={isLaunching || questions.length === 0}
+            className="px-6 py-3 bg-[#4682B4] hover:bg-[#3b6f9a] text-white text-sm font-bold rounded-xl shadow-md shadow-[#4682B4]/20 transition-all flex items-center gap-2"
+          >
+            <Play className="w-4 h-4" />
+            <span>{isLaunching ? 'Initializing Room...' : 'Launch Live Room'}</span>
+          </button>
+        </div>
       </main>
     </div>
   );
@@ -747,8 +607,8 @@ function SessionBuilderContent() {
 
 export default function SessionBuilderPage() {
   return (
-    <React.Suspense fallback={<div className="min-h-screen bg-[#0b0f19] flex items-center justify-center text-white">Loading Session Builder...</div>}>
+    <Suspense fallback={<div className="p-8 text-center text-slate-500">Loading Session Builder...</div>}>
       <SessionBuilderContent />
-    </React.Suspense>
+    </Suspense>
   );
 }

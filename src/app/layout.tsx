@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'LiveEngage / LearnBlended Poll',
+  title: 'LiveEngage | LearnBlended Poll',
   description: 'Real-time live polling, quiz, and classroom engagement platform purpose-built for adult workplace training and corporate facilitation.',
   manifest: '/manifest.json',
   icons: {
@@ -16,7 +16,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: '#0b0f19',
+  themeColor: '#4682B4',
 };
 
 export default function RootLayout({
@@ -25,8 +25,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-[#0b0f19] text-slate-100 min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body className="bg-[#F1F9F3] text-slate-800 min-h-screen flex flex-col selection:bg-[#6DC082] selection:text-white font-sans antialiased">
         {children}
         <script
           dangerouslySetInnerHTML={{
