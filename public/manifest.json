@@ -1,0 +1,24 @@
+{
+  "name": "LiveEngage / LearnBlended Poll",
+  "short_name": "LiveEngage",
+  "description": "Real-time live polling, quiz, and classroom engagement platform purpose-built for adult workplace training",
+  "start_url": "/play",
+  "display": "standalone",
+  "background_color": "#0b0f19",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
