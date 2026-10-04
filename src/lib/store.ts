@@ -2243,11 +2243,19 @@ export class AppStore {
 
   static getSessions(): Session[] {
     if (typeof window === 'undefined') return [];
-    const raw = localStorage.getItem(SESSIONS_STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify([]));
+
+    // One-time automatic clean slate: wipe old dummy test sessions from localStorage
+    const cleanupFlag = localStorage.getItem('liveengage_cleaned_v2');
+    if (!cleanupFlag) {
+      localStorage.removeItem(SESSIONS_STORAGE_KEY);
+      localStorage.removeItem(PARTICIPANTS_STORAGE_KEY);
+      localStorage.removeItem(RESPONSES_STORAGE_KEY);
+      localStorage.setItem('liveengage_cleaned_v2', 'true');
       return [];
     }
+
+    const raw = localStorage.getItem(SESSIONS_STORAGE_KEY);
+    if (!raw) return [];
     try {
       const list: Session[] = JSON.parse(raw);
       // Filter out legacy dummy test sessions from local storage
@@ -2258,6 +2266,28 @@ export class AppStore {
       return cleaned;
     } catch {
       return [];
+    }
+  }
+
+  static async deleteSession(sessionId: string): Promise<void> {
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem(SESSIONS_STORAGE_KEY);
+      if (raw) {
+        try {
+          const list: Session[] = JSON.parse(raw);
+          const filtered = list.filter(s => s.id !== sessionId);
+          localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(filtered));
+        } catch {}
+      }
+    }
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        await supabase.from('sessions').delete().eq('id', sessionId);
+      } catch (e) {
+        console.warn('Supabase deleteSession error:', e);
+      }
     }
   }
 

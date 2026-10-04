@@ -926,10 +926,25 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
                                               </div>
                                             </div>
 
-                                            <div className="text-right">
+                                            <div className="text-right flex items-center gap-1.5">
                                               <span className="text-[11px] font-bold text-[#2e7d32] bg-[#6DC082]/15 px-2 py-0.5 rounded">
                                                 Review
                                               </span>
+                                              <button
+                                                type="button"
+                                                onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  if (confirm(`Delete session record (Cohort ${sess.cohort_number} • ${sess.client_name || 'Generic'})?`)) {
+                                                    await AppStore.deleteSession(sess.id);
+                                                    loadHistoricalSessions(cluster.id);
+                                                    if (reviewSession?.id === sess.id) setReviewSession(null);
+                                                  }
+                                                }}
+                                                title="Delete this session"
+                                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                                              >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                              </button>
                                             </div>
                                           </div>
                                         );
