@@ -1831,54 +1831,7 @@ Electronic accessories score high across CRAVED: Concealable (fits in pockets), 
   }
 ];
 
-const INITIAL_SESSIONS: Session[] = [
-  {
-    id: 'sess-hist-1',
-    course_id: 'course-oq99446',
-    cluster_id: 'cluster-2-4',
-    question_set_id: 'set-generic-2-4',
-    title: 'Cluster 2.4',
-    room_code: '419283',
-    client_name: 'Spur Corporation',
-    cohort_number: 1,
-    entry_mode: 'group',
-    status: 'completed',
-    current_question_index: 4,
-    created_at: new Date(Date.now() - 3600000 * 2.5).toISOString(),
-    completed_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-    questions: INITIAL_QUESTION_SETS[0].questions,
-    participants: [
-      { id: 'p-1', session_id: 'sess-hist-1', display_name: 'Receiving Team Alpha', device_identifier: 'dev-1', score: 450, joined_at: new Date().toISOString() },
-      { id: 'p-2', session_id: 'sess-hist-1', display_name: 'Cold Chain Crew', device_identifier: 'dev-2', score: 380, joined_at: new Date().toISOString() },
-      { id: 'p-3', session_id: 'sess-hist-1', display_name: 'Dispatch Shifters', device_identifier: 'dev-3', score: 410, joined_at: new Date().toISOString() },
-      { id: 'p-4', session_id: 'sess-hist-1', display_name: 'Housekeeping Unit', device_identifier: 'dev-4', score: 350, joined_at: new Date().toISOString() },
-      { id: 'p-5', session_id: 'sess-hist-1', display_name: 'Audit Squad', device_identifier: 'dev-5', score: 440, joined_at: new Date().toISOString() },
-      { id: 'p-6', session_id: 'sess-hist-1', display_name: 'Pallet Masters', device_identifier: 'dev-6', score: 400, joined_at: new Date().toISOString() },
-    ]
-  },
-  {
-    id: 'sess-hist-2',
-    course_id: 'course-oq99446',
-    cluster_id: 'cluster-2-4',
-    question_set_id: 'set-generic-2-4',
-    title: 'Cluster 2.4',
-    room_code: '882194',
-    client_name: 'Spur Corporation',
-    cohort_number: 2,
-    entry_mode: 'group',
-    status: 'completed',
-    current_question_index: 4,
-    created_at: new Date(Date.now() - 86400000).toISOString(),
-    completed_at: new Date(Date.now() - 86400000 + 1800000).toISOString(),
-    questions: INITIAL_QUESTION_SETS[0].questions,
-    participants: [
-      { id: 'p-7', session_id: 'sess-hist-2', display_name: 'Montague Table 1', device_identifier: 'dev-7', score: 420, joined_at: new Date().toISOString() },
-      { id: 'p-8', session_id: 'sess-hist-2', display_name: 'Montague Table 2', device_identifier: 'dev-8', score: 390, joined_at: new Date().toISOString() },
-      { id: 'p-9', session_id: 'sess-hist-2', display_name: 'Montague Table 3', device_identifier: 'dev-9', score: 360, joined_at: new Date().toISOString() },
-      { id: 'p-10', session_id: 'sess-hist-2', display_name: 'Montague Table 4', device_identifier: 'dev-10', score: 410, joined_at: new Date().toISOString() },
-    ]
-  }
-];
+const INITIAL_SESSIONS: Session[] = [];
 
 export class AppStore {
   private static broadcastChannels: Map<string, BroadcastChannel> = new Map();
@@ -2288,18 +2241,23 @@ export class AppStore {
     }
   }
 
-  // --- Session Operations ---
   static getSessions(): Session[] {
-    if (typeof window === 'undefined') return INITIAL_SESSIONS;
+    if (typeof window === 'undefined') return [];
     const raw = localStorage.getItem(SESSIONS_STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(INITIAL_SESSIONS));
-      return INITIAL_SESSIONS;
+      localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify([]));
+      return [];
     }
     try {
-      return JSON.parse(raw);
+      const list: Session[] = JSON.parse(raw);
+      // Filter out legacy dummy test sessions from local storage
+      const cleaned = list.filter(s => !s.id.startsWith('sess-hist-') && s.id !== 'sess-active-1' && !s.id.startsWith('test-room-'));
+      if (cleaned.length !== list.length) {
+        localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(cleaned));
+      }
+      return cleaned;
     } catch {
-      return INITIAL_SESSIONS;
+      return [];
     }
   }
 
