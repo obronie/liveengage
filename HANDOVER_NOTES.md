@@ -152,7 +152,22 @@ git push liveengageza main
 
 ---
 
-## 6. Prompt to Paste into a New Chat
+## 6. Strategic Future Roadmap
+
+### Milestone: Synchronous vs. Asynchronous Delivery & Universal Name Input
+- **Universal "Name" Field**: Simplify `/play` join screen by removing the artificial "Table Team" vs. "Individual Learner" split. Use a single generic input: **Name** (`e.g. Cameron or Table 4`), saving to `participant.display_name`.
+- **Synchronous Delivery (Live Facilitator-Led)**: Existing classroom projector mode where the facilitator synchronizes all devices, timers, and results.
+- **Asynchronous Delivery (Self-Paced / Homework / Independent Practice)**:
+  - **Local Participant Navigation**: Learners proceed through questions at their own speed (`[Prev]`, `[Next]`, question jump pills) without modifying global `current_question_index`.
+  - **Self-Paced Timer**: Untimed or per-participant overall countdown timer from their start click.
+  - **Instant Formative Debrief**: Submitting answers unlocks full score breakdown, model answers, and assessor marking rubrics immediately.
+  - **Facilitator Cohort Monitor**: Presenter screen acts as an async gradebook / monitor showing completion rates, scores, and low-accuracy questions.
+  - **Database Compatibility**: Persist `delivery_mode` in session metadata via `facilitator_instructions` (`DELIVERY::{"delivery_mode":"asynchronous"}::`) to comply with PostgreSQL check constraints without schema downtime.
+- **Technical Plan Reference**: Full specification preserved in `sync_async_architecture_plan.md`.
+
+---
+
+## 7. Prompt to Paste into a New Chat
 
 Copy and paste the exact block below to initialize the next chat session seamlessly:
 
