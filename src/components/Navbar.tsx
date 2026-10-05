@@ -139,6 +139,9 @@ export function Navbar() {
         ? (targetSet.title.startsWith('Cluster') ? targetSet.title : `${clusterPrefix} - ${targetSet.title}`)
         : clusterPrefix;
 
+      const effectiveTimingMode = targetSet.timing_mode || (targetSet.time_allowed_minutes && !targetSet.questions?.some(q => q.duration > 0) ? 'overall' : 'per_question');
+      const effectiveOverallTime = targetSet.overall_time_minutes || targetSet.time_allowed_minutes || 20;
+
       const newSession: Session = {
         id: 'sess-' + Math.random().toString(36).substring(2, 9),
         course_id: targetCourse.id,
@@ -149,6 +152,9 @@ export function Navbar() {
         client_name: targetSet.client_name || 'Generic Standard',
         cohort_number: 1,
         entry_mode: targetSet.default_entry_mode || 'group',
+        timing_mode: effectiveTimingMode,
+        overall_time_minutes: effectiveOverallTime,
+        per_question_duration: targetSet.per_question_duration || 45,
         status: 'lobby',
         current_question_index: 0,
         facilitator_instructions: 'Refer to your Learner Guide during answering. Deliberate with your table before locking in.',

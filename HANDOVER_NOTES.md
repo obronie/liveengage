@@ -169,8 +169,15 @@ Please read HANDOVER_NOTES.md in the root directory for full context on architec
   1. Paper-Saving FSA Printout/PDF (50-60% paper reduction, 2-column MCQ grid, compact 1-line header).
   2. "Fill in the Gap" (Cloze with Word Bank) question format on Mobile, Projector, Paper, Memo, and Editor.
   3. Supabase PostgreSQL check constraint protection for Cloze questions (`guide_topic_hint: 'CLOZE::...'`).
-  4. Timing mode consistency (Overall, Per-Question, Untimed) with zero fallback to 45s.
+  4. Timing mode consistency (Overall, Per-Question, Untimed) with zero fallback to 45s across Navbar & Course launches.
   5. Mobile reconnection persistence, answer review mode, and #1 winner fireworks.
+  6. Classroom Live Delivery Milestones:
+     - MULTIPLE Scoring: 75 pts/correct option, -75 wrong penalty (min 0), +50 bonus if all correct, amber "Partially Correct" header.
+     - Cumulative Score Fix: True sum recalculation across session responses in Supabase & mobile state.
+     - Projector Fit-to-Display: Zero scrollbar cut-off, pinned header and controls bar (`shrink-0`), scroll-contained debrief card (`max-h-[26vh]`).
+     - Blind Auto-Advance: Auto-forwards to next question without revealing answers once all participants complete, with countdown banner & toggle.
+     - Persistent Reveal Mode: Facilitator review stays revealed across Next/Prev navigation until explicitly toggled off.
+     - Realtime Response Deserialization: Projector option bars accurately display participant percentages and counts.
 
 I am ready to proceed with the next task.
 ```

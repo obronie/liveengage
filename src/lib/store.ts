@@ -158,6 +158,8 @@ const INITIAL_QUESTION_SETS: QuestionSet[] = [
     default_entry_mode: 'group',
     total_marks: 12,
     time_allowed_minutes: 20,
+    timing_mode: 'overall',
+    overall_time_minutes: 20,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     questions: [
@@ -339,6 +341,8 @@ The correct SOP sequence is: (1) Halt offloading, (2) Immediately isolate damage
     default_entry_mode: 'group',
     total_marks: 14,
     time_allowed_minutes: 25,
+    timing_mode: 'overall',
+    overall_time_minutes: 25,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     questions: [
@@ -568,6 +572,8 @@ The clerk must immediately: (1) Place the entire pallet in the designated Quaran
     default_entry_mode: 'group',
     total_marks: 10,
     time_allowed_minutes: 20,
+    timing_mode: 'overall',
+    overall_time_minutes: 20,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     questions: [
@@ -724,6 +730,8 @@ Clean-As-You-Go requires workers to remove shrink-wrap off-cuts, timber splinter
     default_entry_mode: 'group',
     total_marks: 10,
     time_allowed_minutes: 20,
+    timing_mode: 'overall',
+    overall_time_minutes: 20,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     questions: [
@@ -2421,6 +2429,35 @@ export class AppStore {
     await this.saveCourse(course);
   }
 
+  static decodeSessionMetadata(remoteSession: any): {
+    timing_mode: 'per_question' | 'overall' | 'untimed';
+    overall_time_minutes: number;
+    overall_timer_end?: string | null;
+    per_question_duration: number;
+    show_leaderboard: boolean;
+    clean_instructions: string;
+  } {
+    let clean = remoteSession?.facilitator_instructions || '';
+    let meta: any = {};
+    if (typeof clean === 'string' && clean.startsWith('TIMING::')) {
+      const secondDelim = clean.indexOf('::', 8);
+      if (secondDelim !== -1) {
+        try {
+          meta = JSON.parse(clean.substring(8, secondDelim));
+          clean = clean.substring(secondDelim + 2);
+        } catch {}
+      }
+    }
+    return {
+      timing_mode: remoteSession?.timing_mode || meta.timing_mode || 'per_question',
+      overall_time_minutes: remoteSession?.overall_time_minutes ?? meta.overall_time_minutes ?? 20,
+      overall_timer_end: remoteSession?.overall_timer_end || meta.overall_timer_end || null,
+      per_question_duration: remoteSession?.per_question_duration ?? meta.per_question_duration ?? 45,
+      show_leaderboard: remoteSession?.show_leaderboard !== undefined ? remoteSession.show_leaderboard : (meta.show_leaderboard || false),
+      clean_instructions: clean,
+    };
+  }
+
   static async getSessionByRoomCode(roomCode: string): Promise<Session | null> {
     const normalized = roomCode.trim().toUpperCase();
     const localSessions = this.getSessions();
@@ -2445,14 +2482,16 @@ export class AppStore {
             });
             data.questions.sort((a: Question, b: Question) => a.question_order - b.question_order);
           }
+          const decoded = this.decodeSessionMetadata(data);
           const merged: Session = {
             ...(local || {}),
             ...data,
-            timing_mode: data.timing_mode || local?.timing_mode || 'per_question',
-            overall_time_minutes: data.overall_time_minutes ?? local?.overall_time_minutes ?? 20,
-            overall_timer_end: data.overall_timer_end || local?.overall_timer_end,
-            per_question_duration: data.per_question_duration ?? local?.per_question_duration ?? 45,
-            show_leaderboard: data.show_leaderboard !== undefined ? data.show_leaderboard : (local?.show_leaderboard || false),
+            timing_mode: decoded.timing_mode || local?.timing_mode || 'per_question',
+            overall_time_minutes: decoded.overall_time_minutes ?? local?.overall_time_minutes ?? 20,
+            overall_timer_end: decoded.overall_timer_end || local?.overall_timer_end,
+            per_question_duration: decoded.per_question_duration ?? local?.per_question_duration ?? 45,
+            show_leaderboard: decoded.show_leaderboard !== undefined ? decoded.show_leaderboard : (local?.show_leaderboard || false),
+            facilitator_instructions: decoded.clean_instructions,
           };
           if (typeof window !== 'undefined') {
             const idx = localSessions.findIndex(s => s.id === merged.id || s.room_code === merged.room_code);
@@ -2482,14 +2521,16 @@ export class AppStore {
           const local = this.getSessions();
           const merged = data.map(remoteSession => {
             const loc = local.find(s => s.id === remoteSession.id || s.room_code === remoteSession.room_code);
+            const decoded = this.decodeSessionMetadata(remoteSession);
             return {
               ...(loc || {}),
               ...remoteSession,
-              timing_mode: remoteSession.timing_mode || loc?.timing_mode || 'per_question',
-              overall_time_minutes: remoteSession.overall_time_minutes ?? loc?.overall_time_minutes ?? 20,
-              overall_timer_end: remoteSession.overall_timer_end || loc?.overall_timer_end,
-              per_question_duration: remoteSession.per_question_duration ?? loc?.per_question_duration ?? 45,
-              show_leaderboard: remoteSession.show_leaderboard !== undefined ? remoteSession.show_leaderboard : (loc?.show_leaderboard || false),
+              timing_mode: decoded.timing_mode || loc?.timing_mode || 'per_question',
+              overall_time_minutes: decoded.overall_time_minutes ?? loc?.overall_time_minutes ?? 20,
+              overall_timer_end: decoded.overall_timer_end || loc?.overall_timer_end,
+              per_question_duration: decoded.per_question_duration ?? loc?.per_question_duration ?? 45,
+              show_leaderboard: decoded.show_leaderboard !== undefined ? decoded.show_leaderboard : (loc?.show_leaderboard || false),
+              facilitator_instructions: decoded.clean_instructions,
             } as Session;
           });
           if (typeof window !== 'undefined') {
@@ -2524,6 +2565,16 @@ export class AppStore {
     const supabase = getSupabaseClient();
     if (supabase) {
       try {
+        const timingMeta = {
+          timing_mode: session.timing_mode || 'per_question',
+          overall_time_minutes: session.overall_time_minutes || 20,
+          overall_timer_end: session.overall_timer_end,
+          per_question_duration: session.per_question_duration || 45,
+          show_leaderboard: session.show_leaderboard || false,
+        };
+        const rawInstructions = session.facilitator_instructions ? session.facilitator_instructions.replace(/^TIMING::\{.*?\}::/, '') : '';
+        const encodedInstructions = `TIMING::${JSON.stringify(timingMeta)}::${rawInstructions}`;
+
         await supabase.from('sessions').upsert({
           id: session.id,
           group_id: session.group_id,
@@ -2537,7 +2588,7 @@ export class AppStore {
           entry_mode: session.entry_mode,
           status: session.status,
           current_question_index: session.current_question_index,
-          facilitator_instructions: session.facilitator_instructions,
+          facilitator_instructions: encodedInstructions,
           question_timer_end: session.question_timer_end,
           created_at: session.created_at,
         });
@@ -2676,6 +2727,44 @@ export class AppStore {
     }
   }
 
+  static async fetchResponses(sessionId: string, questionId?: string): Promise<ResponseRecord[]> {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        let query = supabase.from('responses').select('*').eq('session_id', sessionId);
+        if (questionId) {
+          query = query.eq('question_id', questionId);
+        }
+        const { data, error } = await query;
+        if (!error && data) {
+          const normalized = data.map((r: any) => {
+            let sel = r.selected_options;
+            if (typeof sel === 'string') {
+              try { sel = JSON.parse(sel); } catch {}
+            }
+            return {
+              ...r,
+              selected_options: sel
+            } as ResponseRecord;
+          });
+          if (typeof window !== 'undefined') {
+            const raw = localStorage.getItem(RESPONSES_STORAGE_KEY);
+            let localAll: ResponseRecord[] = raw ? JSON.parse(raw) : [];
+            normalized.forEach(nr => {
+              localAll = localAll.filter(lr => !(lr.question_id === nr.question_id && lr.participant_id === nr.participant_id));
+              localAll.push(nr);
+            });
+            localStorage.setItem(RESPONSES_STORAGE_KEY, JSON.stringify(localAll));
+          }
+          return normalized;
+        }
+      } catch (err) {
+        console.warn('Supabase fetchResponses error:', err);
+      }
+    }
+    return this.getResponses(sessionId, questionId);
+  }
+
   static async submitResponse(
     session: Session,
     question: Question,
@@ -2707,6 +2796,33 @@ export class AppStore {
         // Proportionate points for partially correct gaps
         pointsAwarded = Math.round((matchCount / correct.length) * 100);
       }
+    } else if (question.format === 'MULTIPLE') {
+      const selected = Array.isArray(selectedOptions) ? selectedOptions : [];
+      const correct = question.correct_options || [];
+
+      // Proportional scoring: 75 pts per correct choice, -75 for incorrect choices, +50 bonus if 100% correct
+      let correctPicked = 0;
+      let incorrectPicked = 0;
+
+      selected.forEach(optIdx => {
+        if (correct.includes(optIdx)) {
+          correctPicked++;
+        } else {
+          incorrectPicked++;
+        }
+      });
+
+      const isAllCorrect = (
+        correctPicked === correct.length &&
+        incorrectPicked === 0 &&
+        correct.length > 0
+      );
+
+      isCorrect = isAllCorrect;
+
+      const basePoints = Math.max(0, (correctPicked * 75) - (incorrectPicked * 75));
+      const bonus = isAllCorrect ? 50 : 0;
+      pointsAwarded = basePoints + bonus;
     } else {
       const selected = Array.isArray(selectedOptions) ? selectedOptions : [];
       const correct = question.correct_options || [];
@@ -2749,13 +2865,16 @@ export class AppStore {
     all.push(response);
     localStorage.setItem(RESPONSES_STORAGE_KEY, JSON.stringify(all));
 
+    // Calculate true cumulative score across all questions answered by this participant in this session
+    const pResponses = all.filter(r => r.participant_id === participant.id && r.session_id === session.id);
+    let cumulativeScore = pResponses.reduce((sum, r) => sum + (r.points_awarded || 0), 0);
+
     const pRaw = localStorage.getItem(PARTICIPANTS_STORAGE_KEY);
     if (pRaw) {
       const pAll: Participant[] = JSON.parse(pRaw);
       const targetP = pAll.find(p => p.id === participant.id);
       if (targetP) {
-        const pResponses = all.filter(r => r.participant_id === participant.id);
-        targetP.score = pResponses.reduce((sum, r) => sum + r.points_awarded, 0);
+        targetP.score = cumulativeScore;
         localStorage.setItem(PARTICIPANTS_STORAGE_KEY, JSON.stringify(pAll));
       }
     }
@@ -2780,8 +2899,19 @@ export class AppStore {
           onConflict: 'question_id,participant_id'
         });
 
+        // Query all responses from Supabase to guarantee 100% accurate cumulative score in database
+        const { data: dbResponses } = await supabase
+          .from('responses')
+          .select('points_awarded')
+          .eq('session_id', session.id)
+          .eq('participant_id', participant.id);
+
+        if (dbResponses && dbResponses.length > 0) {
+          cumulativeScore = dbResponses.reduce((sum, r) => sum + (r.points_awarded || 0), 0);
+        }
+
         await supabase.from('participants').update({
-          score: participant.score + pointsAwarded
+          score: cumulativeScore
         }).eq('id', participant.id);
       } catch (err) {
         console.warn('Supabase submitResponse error, queued locally:', err);
@@ -2855,13 +2985,27 @@ export class AppStore {
         supabaseChannel = supabase
           .channel(`room_${roomCode}`)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, (payload) => {
-            callback({ type: 'SESSION_UPDATED', payload: payload.new });
+            const decoded = AppStore.decodeSessionMetadata(payload.new);
+            callback({
+              type: 'SESSION_UPDATED',
+              payload: {
+                ...payload.new,
+                ...decoded,
+                facilitator_instructions: decoded.clean_instructions,
+              }
+            });
           })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'participants' }, (payload) => {
             callback({ type: 'PARTICIPANT_JOINED', payload: payload.new });
           })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'responses' }, (payload) => {
-            callback({ type: 'RESPONSE_SUBMITTED', payload: payload.new });
+            let record: any = payload.new;
+            if (record && typeof record.selected_options === 'string') {
+              try {
+                record = { ...record, selected_options: JSON.parse(record.selected_options) };
+              } catch {}
+            }
+            callback({ type: 'RESPONSE_SUBMITTED', payload: record });
           })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'hidden_words' }, (payload) => {
             callback({ type: 'WORD_HIDDEN', payload: payload.new });

@@ -30,7 +30,8 @@ import {
   Play,
   UserX,
   Radio,
-  Tag
+  Tag,
+  FastForward
 } from 'lucide-react';
 
 export default function PresenterPage() {
@@ -53,6 +54,10 @@ export default function PresenterPage() {
   const [showRationale, setShowRationale] = useState<boolean>(true); // Shared Classroom Debrief Card Toggle
   const [showAnsweredDropdown, setShowAnsweredDropdown] = useState<boolean>(false); // Top right answered tracker popover
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [revealMode, setRevealMode] = useState<boolean>(false); // Persistent Reveal Mode across questions during review
+  const [autoAdvance, setAutoAdvance] = useState<boolean>(true); // Auto-advance without revealing answers when all answer
+  const [autoAdvanceCountdown, setAutoAdvanceCountdown] = useState<number | null>(null);
+  const autoAdvanceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load Session Data & subscribe to updates
@@ -63,12 +68,15 @@ export default function PresenterPage() {
       const sess = await AppStore.getSessionByRoomCode(roomCode);
       if (sess) {
         setSession(sess);
-        const pList = AppStore.getParticipants(sess.id);
+        if (sess.status === 'revealed') {
+          setRevealMode(true);
+        }
+        const pList = await AppStore.fetchParticipants(sess.id);
         setParticipants(pList);
 
         const currentQ = sess.questions?.[sess.current_question_index];
         if (currentQ) {
-          const rList = AppStore.getResponses(sess.id, currentQ.id);
+          const rList = await AppStore.fetchResponses(sess.id, currentQ.id);
           setResponses(rList);
           const hw = AppStore.getHiddenWords(currentQ.id);
           setHiddenWords(hw);
@@ -131,18 +139,26 @@ export default function PresenterPage() {
           return [...prev, event.payload];
         });
       } else if (event.type === 'RESPONSE_SUBMITTED') {
+        let payloadRecord = event.payload;
+        if (payloadRecord && typeof payloadRecord.selected_options === 'string') {
+          try {
+            payloadRecord = { ...payloadRecord, selected_options: JSON.parse(payloadRecord.selected_options) };
+          } catch {}
+        }
         setResponses((prev) => {
-          const filtered = prev.filter(r => !(r.question_id === event.payload.question_id && r.participant_id === event.payload.participant_id));
-          return [...filtered, event.payload];
+          const filtered = prev.filter(r => !(r.question_id === payloadRecord.question_id && r.participant_id === payloadRecord.participant_id));
+          return [...filtered, payloadRecord];
         });
-        setParticipants((prev) =>
-          prev.map(p => p.id === event.payload.participant_id
-            ? { ...p, score: p.score + (event.payload.points_awarded || 0) }
-            : p
-          )
-        );
+        if (session?.id) {
+          AppStore.fetchParticipants(session.id).then(cohort => {
+            if (cohort && cohort.length > 0) setParticipants(cohort);
+          });
+        }
       } else if (event.type === 'SESSION_UPDATED') {
         setSession((prev) => ({ ...(prev || {}), ...event.payload }));
+        if (event.payload?.status === 'revealed') {
+          setRevealMode(true);
+        }
       } else if (event.type === 'WORD_HIDDEN') {
         setHiddenWords((prev) => [...prev, event.payload.word.toLowerCase()]);
       }
@@ -153,7 +169,7 @@ export default function PresenterPage() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [roomCode]);
+  }, [roomCode, session?.id]);
 
   // Countdown timer effect
   useEffect(() => {
@@ -177,6 +193,43 @@ export default function PresenterPage() {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [isTimerRunning, timeLeft]);
+
+  // Auto-advance without revealing answers when all connected participants have completed the question
+  useEffect(() => {
+    if (!autoAdvance || !session || session.status !== 'question_active') {
+      if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
+      setAutoAdvanceCountdown(null);
+      return;
+    }
+
+    const currentQ = session.questions?.[session.current_question_index];
+    const currentQResps = responses.filter(r => !r.question_id || r.question_id === currentQ?.id);
+    const answeredCount = new Set(currentQResps.map(r => r.participant_id)).size;
+
+    if (participants.length > 0 && answeredCount >= participants.length) {
+      if (autoAdvanceCountdown === null) {
+        setAutoAdvanceCountdown(2);
+      }
+    } else {
+      if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
+      setAutoAdvanceCountdown(null);
+    }
+  }, [autoAdvance, session?.status, session?.current_question_index, responses, participants.length, autoAdvanceCountdown]);
+
+  useEffect(() => {
+    if (autoAdvanceCountdown !== null && autoAdvanceCountdown > 0) {
+      autoAdvanceTimerRef.current = setTimeout(() => {
+        setAutoAdvanceCountdown(prev => (prev !== null ? prev - 1 : null));
+      }, 1000);
+    } else if (autoAdvanceCountdown === 0) {
+      setAutoAdvanceCountdown(null);
+      handleNextQuestion();
+    }
+
+    return () => {
+      if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
+    };
+  }, [autoAdvanceCountdown]);
 
   const handleAutoLock = async () => {
     if (!session) return;
@@ -300,6 +353,7 @@ export default function PresenterPage() {
   const handleRevealAnswers = async () => {
     if (!session) return;
     setIsTimerRunning(false);
+    setRevealMode(true);
     const updated: Session = { ...session, status: 'revealed' };
     setSession(updated);
     await AppStore.saveSession(updated);
@@ -316,6 +370,14 @@ export default function PresenterPage() {
         });
       }
     }
+  };
+
+  const handleHideAnswers = async () => {
+    if (!session) return;
+    setRevealMode(false);
+    const updated: Session = { ...session, status: 'question_locked' };
+    setSession(updated);
+    await AppStore.saveSession(updated);
   };
 
   const handleNextQuestion = async () => {
@@ -341,7 +403,7 @@ export default function PresenterPage() {
     const isUntimed = session.timing_mode === 'untimed';
     const isOverall = session.timing_mode === 'overall';
     let duration = 0;
-    if (!isUntimed && !isPostSessionReview) {
+    if (!isUntimed && !isPostSessionReview && !revealMode) {
       if (isOverall) {
         duration = timeLeft; // keep running overall session clock
       } else {
@@ -349,22 +411,29 @@ export default function PresenterPage() {
       }
     }
 
+    const nextStatus = revealMode ? 'revealed' : (isPostSessionReview ? 'question_locked' : 'question_active');
+
     const updated: Session = {
       ...session,
       current_question_index: nextIdx,
-      status: isPostSessionReview ? 'question_locked' : 'question_active',
-      question_timer_end: (isUntimed || isPostSessionReview || duration <= 0) 
+      status: nextStatus,
+      question_timer_end: (revealMode || isUntimed || isPostSessionReview || duration <= 0) 
         ? undefined 
         : (isOverall ? session.overall_timer_end : new Date(Date.now() + duration * 1000).toISOString()),
     };
 
     setSession(updated);
-    if (!isOverall) {
+    if (!isOverall && !revealMode) {
       setTimeLeft(isPostSessionReview ? 0 : duration);
       setInitialDuration(duration);
       setIsTimerRunning(!isPostSessionReview && !isUntimed && duration > 0);
+    } else if (revealMode) {
+      setIsTimerRunning(false);
     }
-    setResponses(AppStore.getResponses(session.id, nextQ.id));
+
+    AppStore.fetchResponses(session.id, nextQ.id).then(rList => {
+      setResponses(rList);
+    });
     setHiddenWords(AppStore.getHiddenWords(nextQ.id));
     setShowLeaderboard(false);
     setShowRationale(true);
@@ -379,7 +448,7 @@ export default function PresenterPage() {
     const isUntimed = session.timing_mode === 'untimed';
     const isOverall = session.timing_mode === 'overall';
     let duration = 0;
-    if (!isUntimed && !isPostSessionReview) {
+    if (!isUntimed && !isPostSessionReview && !revealMode) {
       if (isOverall) {
         duration = timeLeft;
       } else {
@@ -387,22 +456,29 @@ export default function PresenterPage() {
       }
     }
 
+    const prevStatus = revealMode ? 'revealed' : (isPostSessionReview ? 'question_locked' : 'question_active');
+
     const updated: Session = {
       ...session,
       current_question_index: prevIdx,
-      status: isPostSessionReview ? 'question_locked' : 'question_active',
-      question_timer_end: (isUntimed || isPostSessionReview || duration <= 0) 
+      status: prevStatus,
+      question_timer_end: (revealMode || isUntimed || isPostSessionReview || duration <= 0) 
         ? undefined 
         : (isOverall ? session.overall_timer_end : new Date(Date.now() + duration * 1000).toISOString()),
     };
 
     setSession(updated);
-    if (!isOverall) {
+    if (!isOverall && !revealMode) {
       setTimeLeft(isPostSessionReview ? 0 : duration);
       setInitialDuration(duration);
       setIsTimerRunning(!isPostSessionReview && !isUntimed && duration > 0);
+    } else if (revealMode) {
+      setIsTimerRunning(false);
     }
-    setResponses(AppStore.getResponses(session.id, prevQ.id));
+
+    AppStore.fetchResponses(session.id, prevQ.id).then(rList => {
+      setResponses(rList);
+    });
     setHiddenWords(AppStore.getHiddenWords(prevQ.id));
     setShowLeaderboard(false);
     setShowRationale(true);
@@ -413,6 +489,7 @@ export default function PresenterPage() {
   const handleJumpToBeginningReview = async () => {
     if (!session || !session.questions || session.questions.length === 0) return;
     const firstQ = session.questions[0];
+    setRevealMode(false); // Reset revealMode so review starts hidden
 
     const updated: Session = {
       ...session,
@@ -424,7 +501,9 @@ export default function PresenterPage() {
     setSession(updated);
     setIsTimerRunning(false);
     setTimeLeft(0);
-    setResponses(AppStore.getResponses(session.id, firstQ.id));
+    AppStore.fetchResponses(session.id, firstQ.id).then(rList => {
+      setResponses(rList);
+    });
     setHiddenWords(AppStore.getHiddenWords(firstQ.id));
     setShowLeaderboard(false);
     setShowRationale(true);
@@ -490,6 +569,8 @@ export default function PresenterPage() {
         e.preventDefault();
         if (session?.status !== 'revealed') {
           handleRevealAnswers();
+        } else {
+          handleHideAnswers();
         }
       } else if (e.key === 'l' || e.key === 'L') {
         e.preventDefault();
@@ -506,11 +587,11 @@ export default function PresenterPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [session, isTimerRunning]);
+  }, [session, isTimerRunning, revealMode]);
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-[#0a0f1d] flex items-center justify-center text-white font-sans">
+      <div className="h-screen bg-[#0a0f1d] flex items-center justify-center text-white font-sans">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-[#4682B4] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <h2 className="text-lg font-bold">Connecting to Room {roomCode}...</h2>
@@ -541,6 +622,7 @@ export default function PresenterPage() {
   const wordFrequencies: { [key: string]: number } = {};
   if (currentQuestion?.format === 'WORD_CLOUD') {
     responses.forEach(r => {
+      if (r.question_id && r.question_id !== currentQuestion.id) return;
       const text = typeof r.selected_options === 'string' ? r.selected_options : '';
       if (!text) return;
       const normalized = text.toLowerCase().trim().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, '');
@@ -550,30 +632,69 @@ export default function PresenterPage() {
     });
   }
 
-  // Bar Chart Distribution Calculation
+  // Bar Chart Distribution Calculation with bulletproof selected_options parsing
   const optionCounts: number[] = currentQuestion ? new Array(currentQuestion.options.length).fill(0) : [];
   if (currentQuestion && currentQuestion.format !== 'WORD_CLOUD') {
     responses.forEach(r => {
-      const selected = Array.isArray(r.selected_options) ? r.selected_options : [];
+      if (r.question_id && r.question_id !== currentQuestion.id) return;
+      let selected: number[] = [];
+      if (Array.isArray(r.selected_options)) {
+        selected = r.selected_options.map(x => typeof x === 'number' ? x : parseInt(x, 10)).filter(x => !isNaN(x));
+      } else if (typeof r.selected_options === 'string') {
+        try {
+          const parsed = JSON.parse(r.selected_options);
+          if (Array.isArray(parsed)) {
+            selected = parsed.map(x => typeof x === 'number' ? x : parseInt(x, 10)).filter(x => !isNaN(x));
+          } else if (typeof parsed === 'number') {
+            selected = [parsed];
+          }
+        } catch {
+          selected = [];
+        }
+      }
       selected.forEach(idx => {
-        if (typeof idx === 'number' && idx < optionCounts.length) {
+        if (typeof idx === 'number' && idx >= 0 && idx < optionCounts.length) {
           optionCounts[idx]++;
         }
       });
     });
   }
 
+  const currentQResponses = responses.filter(r => !r.question_id || r.question_id === currentQuestion?.id);
   const rankedParticipants = [...participants].sort((a, b) => b.score - a.score);
 
   // Live Answered vs Pending status tracking
-  const answeredParticipantIds = new Set(responses.map(r => r.participant_id));
+  const answeredParticipantIds = new Set(currentQResponses.map(r => r.participant_id));
   const answeredParticipants = participants.filter(p => answeredParticipantIds.has(p.id));
   const pendingParticipants = participants.filter(p => !answeredParticipantIds.has(p.id));
 
   return (
-    <div className="min-h-screen bg-[#0a0f1d] text-slate-100 flex flex-col select-none overflow-hidden font-sans">
+    <div className="h-screen max-h-screen bg-[#0a0f1d] text-slate-100 flex flex-col select-none overflow-hidden font-sans relative">
+      {/* Auto-Advance Active Countdown Overlay Banner */}
+      {autoAdvanceCountdown !== null && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-[#6DC082] text-slate-950 font-black px-4 py-2 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-150 border border-white">
+          <CheckCircle2 className="w-5 h-5 text-slate-950" />
+          <span className="text-xs sm:text-sm">All {participants.length} answered! Advancing in {autoAdvanceCountdown}s...</span>
+          <button
+            onClick={() => handleNextQuestion()}
+            className="px-2.5 py-1 rounded-xl bg-slate-950 text-white text-xs font-bold hover:bg-slate-900 transition-colors"
+          >
+            Advance Now →
+          </button>
+          <button
+            onClick={() => {
+              setAutoAdvanceCountdown(null);
+              setAutoAdvance(false);
+            }}
+            className="px-2.5 py-1 rounded-xl bg-slate-950/20 text-slate-950 hover:bg-slate-950/30 text-xs font-bold transition-colors"
+          >
+            Pause
+          </button>
+        </div>
+      )}
+
       {/* Top Projector Header Bar */}
-      <header className="h-16 px-6 sm:px-8 border-b border-[#1e2e4a] bg-[#121b2d]/90 backdrop-blur flex items-center justify-between shrink-0">
+      <header className="h-14 sm:h-16 px-4 sm:px-6 border-b border-[#1e2e4a] bg-[#121b2d]/90 backdrop-blur flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
           <button
             onClick={() => router.push('/')}
@@ -691,7 +812,7 @@ export default function PresenterPage() {
       </header>
 
       {/* Main Presentation Surface */}
-      <main className="flex-1 flex flex-col p-6 sm:p-10 max-w-7xl mx-auto w-full justify-between overflow-y-auto">
+      <main className={`flex-1 min-h-0 flex flex-col px-4 sm:px-8 py-2 sm:py-3 max-w-7xl mx-auto w-full ${session.status === 'lobby' ? 'overflow-y-auto justify-center' : 'overflow-hidden justify-between'}`}>
         {/* LOBBY STATE */}
         {session.status === 'lobby' && (
           <div className="flex-1 flex flex-col items-center justify-center text-center my-auto animate-in fade-in zoom-in-95 duration-200">
@@ -786,20 +907,20 @@ export default function PresenterPage() {
 
         {/* ACTIVE / LOCKED / REVEALED QUESTION STATE */}
         {session.status !== 'lobby' && currentQuestion && (
-          <div className="flex-1 flex flex-col justify-between animate-in fade-in duration-200">
+          <div className="flex-1 min-h-0 flex flex-col justify-between animate-in fade-in duration-200">
             {/* Top Row: Progress Bar & Timer */}
-            <div className="space-y-4">
+            <div className="shrink-0 space-y-2 sm:space-y-3">
               {/* Dynamic Smooth Progress Bar */}
-              <div className="w-full h-3 bg-slate-900 rounded-full overflow-hidden border border-[#1e2e4a]">
+              <div className="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden border border-[#1e2e4a]">
                 <div
                   className={`h-full transition-all duration-1000 ease-linear ${progressBarClass}`}
                   style={{ width: `${timerPercentage}%` }}
                 />
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <span className="px-3 py-1 rounded-xl bg-[#4682B4]/15 border border-[#4682B4]/30 text-[#4682B4] text-xs font-bold uppercase tracking-wider">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="px-2.5 py-0.5 rounded-lg bg-[#4682B4]/15 border border-[#4682B4]/30 text-[#4682B4] text-xs font-bold uppercase tracking-wider">
                     Question {session.current_question_index + 1} of {session.questions?.length}
                   </span>
                   <span className="text-xs font-semibold text-slate-400">
@@ -818,11 +939,11 @@ export default function PresenterPage() {
                 </div>
 
                 {/* Massive Digital Timer */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5">
                   <div
-                    className={`px-6 py-2 rounded-2xl border font-mono font-black text-2xl sm:text-3xl flex items-center gap-2 shadow-lg transition-colors ${timerColorClass}`}
+                    className={`px-4 sm:px-5 py-1.5 rounded-xl border font-mono font-black text-xl sm:text-2xl flex items-center gap-2 shadow-lg transition-colors ${timerColorClass}`}
                   >
-                    <Clock className="w-6 h-6 animate-pulse" />
+                    <Clock className="w-5 h-5 animate-pulse" />
                     <span>
                       {session.timing_mode === 'untimed' ? (
                         'Untimed'
@@ -843,7 +964,7 @@ export default function PresenterPage() {
                   </div>
 
                   {session.status === 'question_locked' && (
-                    <span className="px-3 py-1.5 rounded-xl bg-red-500/20 text-red-400 border border-red-500/30 font-bold text-xs flex items-center gap-1">
+                    <span className="px-2.5 py-1 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 font-bold text-xs flex items-center gap-1">
                       <Lock className="w-3.5 h-3.5" /> Locked
                     </span>
                   )}
@@ -851,16 +972,16 @@ export default function PresenterPage() {
               </div>
 
               {/* Question Stem */}
-              <div className="pt-2 pb-2">
-                <h2 className="text-2xl sm:text-4xl font-extrabold text-white leading-tight">
+              <div className="pt-0.5 pb-0.5">
+                <h2 className="text-lg sm:text-2xl lg:text-3xl font-extrabold text-white leading-snug">
                   {currentQuestion.body}
                 </h2>
               </div>
 
               {/* Live Participant Turn-In Status Strip */}
               {participants.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 pb-2">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                <div className="flex flex-wrap items-center gap-1.5 pb-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                     Live Turn-in:
                   </span>
                   {participants.map(p => {
@@ -868,16 +989,16 @@ export default function PresenterPage() {
                     return (
                       <span
                         key={p.id}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-bold transition-all ${
                           hasAnswered
                             ? 'bg-[#6DC082]/20 text-[#6DC082] border border-[#6DC082]/40 shadow-sm shadow-[#6DC082]/20'
                             : 'bg-slate-900/80 text-slate-500 border border-slate-800'
                         }`}
                       >
                         {hasAnswered ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-[#6DC082]" />
+                          <CheckCircle2 className="w-3 h-3 text-[#6DC082]" />
                         ) : (
-                          <span className="w-2 h-2 rounded-full bg-slate-600 animate-pulse" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-600 animate-pulse" />
                         )}
                         <span>{p.display_name}</span>
                       </span>
@@ -888,7 +1009,7 @@ export default function PresenterPage() {
             </div>
 
             {/* Answer Display Area: Structured Choices, Cloze, or Word Cloud */}
-            <div className="my-auto py-6">
+            <div className="flex-1 min-h-0 py-2 sm:py-3 overflow-y-auto pr-1 flex flex-col justify-center">
               {currentQuestion.format === 'WORD_CLOUD' ? (
                 /* Dynamic Word Cloud View with 1-Click Moderation */
                 <div className="p-8 rounded-3xl bg-[#121b2d] border border-[#1e2e4a] min-h-[280px] flex flex-col items-center justify-center">
@@ -993,7 +1114,7 @@ export default function PresenterPage() {
                 </div>
               ) : (
                 /* Structured Options Cards & Bar Chart Distribution in LearnBlended Styling */
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3">
                   {currentQuestion.options.map((opt, idx) => {
                     const isCorrect = currentQuestion.correct_options.includes(idx);
                     const isRevealed = session.status === 'revealed';
@@ -1004,7 +1125,7 @@ export default function PresenterPage() {
                     let cardClasses = 'bg-[#121b2d] border-[#1e2e4a] text-slate-200';
                     if (isRevealed) {
                       if (isCorrect) {
-                        cardClasses = 'bg-[#6DC082]/20 border-[#6DC082] text-white shadow-[0_0_25px_rgba(109,192,130,0.3)]';
+                        cardClasses = 'bg-[#6DC082]/20 border-[#6DC082] text-white shadow-[0_0_20px_rgba(109,192,130,0.25)]';
                       } else {
                         cardClasses = 'bg-[#121b2d]/50 border-[#1e2e4a]/60 text-slate-400 opacity-60';
                       }
@@ -1013,7 +1134,7 @@ export default function PresenterPage() {
                     return (
                       <div
                         key={idx}
-                        className={`p-5 rounded-2xl border transition-all relative overflow-hidden flex flex-col justify-between min-h-[96px] ${cardClasses}`}
+                        className={`p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border transition-all relative overflow-hidden flex flex-col justify-between min-h-[64px] sm:min-h-[74px] ${cardClasses}`}
                       >
                         {/* Animated background bar in revealed state */}
                         {isRevealed && (
@@ -1025,10 +1146,10 @@ export default function PresenterPage() {
                           />
                         )}
 
-                        <div className="relative z-10 flex items-start justify-between gap-3">
-                          <div className="flex items-start gap-3">
+                        <div className="relative z-10 flex items-start justify-between gap-2.5">
+                          <div className="flex items-start gap-2.5">
                             <span
-                              className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
+                              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 ${
                                 isRevealed && isCorrect
                                   ? 'bg-[#6DC082] text-white'
                                   : 'bg-[#0a0f1d] text-[#4682B4] border border-[#1e2e4a]'
@@ -1036,17 +1157,17 @@ export default function PresenterPage() {
                             >
                               {String.fromCharCode(65 + idx)}
                             </span>
-                            <span className="text-base sm:text-lg font-bold leading-snug">
+                            <span className="text-sm sm:text-base font-bold leading-snug">
                               {opt}
                             </span>
                           </div>
 
                           {isRevealed && (
-                            <div className="shrink-0 flex items-center gap-1.5 font-mono text-sm font-bold">
+                            <div className="shrink-0 flex items-center gap-1.5 font-mono text-xs sm:text-sm font-bold">
                               {isCorrect ? (
-                                <CheckCircle2 className="w-5 h-5 text-[#6DC082]" />
+                                <CheckCircle2 className="w-4 h-4 text-[#6DC082]" />
                               ) : (
-                                <XCircle className="w-5 h-5 text-slate-500" />
+                                <XCircle className="w-4 h-4 text-slate-500" />
                               )}
                               <span>{percent}%</span>
                               <span className="text-xs text-slate-400">({count})</span>
@@ -1071,32 +1192,32 @@ export default function PresenterPage() {
                   const assessorPart = parts[1]?.replace(/^(📝\s*)?(How the Assessor Marks This:\s*)?/i, '').trim();
 
                   return (
-                    <div className="mt-6 space-y-3 animate-in fade-in slide-in-from-bottom-3 duration-300">
+                    <div className="mt-3 sm:mt-4 space-y-2 max-h-[26vh] overflow-y-auto pr-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
                       {/* Model Answer Card */}
-                      <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 shadow-lg">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <div className="flex items-center gap-2 text-emerald-400 text-xs font-extrabold uppercase tracking-wider">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <div className="p-3 sm:p-3.5 rounded-xl sm:rounded-2xl bg-emerald-950/40 border border-emerald-500/40 shadow-lg">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-extrabold uppercase tracking-wider">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                             <span>🟢 The Model Answer (Calculations & Steps)</span>
                           </div>
                           <span className="text-[10px] text-emerald-300/70 font-semibold uppercase">Exam Benchmark</span>
                         </div>
-                        <p className="text-sm sm:text-base text-emerald-100 font-medium leading-relaxed whitespace-pre-line font-mono">
+                        <p className="text-xs sm:text-sm text-emerald-100 font-medium leading-relaxed whitespace-pre-line font-mono">
                           {modelPart}
                         </p>
                       </div>
 
                       {/* Assessor Marking Guidance Card */}
                       {assessorPart && (
-                        <div className="p-4 rounded-2xl bg-[#4682B4]/15 border border-[#4682B4]/40 shadow-lg">
-                          <div className="flex items-center justify-between mb-1.5">
-                            <div className="flex items-center gap-2 text-sky-300 text-xs font-extrabold uppercase tracking-wider">
-                              <BookOpen className="w-4 h-4 text-sky-400" />
+                        <div className="p-3 sm:p-3.5 rounded-xl sm:rounded-2xl bg-[#4682B4]/15 border border-[#4682B4]/40 shadow-lg">
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-1.5 text-sky-300 text-xs font-extrabold uppercase tracking-wider">
+                              <BookOpen className="w-3.5 h-3.5 text-sky-400" />
                               <span>📝 How the Assessor Marks This (Points & Traps)</span>
                             </div>
                             <span className="text-[10px] text-slate-400">Classroom Debrief Guide</span>
                           </div>
-                          <p className="text-sm sm:text-base text-slate-200 font-medium leading-relaxed whitespace-pre-line">
+                          <p className="text-xs sm:text-sm text-slate-200 font-medium leading-relaxed whitespace-pre-line">
                             {assessorPart}
                           </p>
                         </div>
@@ -1106,15 +1227,15 @@ export default function PresenterPage() {
                 }
 
                 return (
-                  <div className="mt-6 p-5 rounded-2xl bg-[#4682B4]/15 border border-[#4682B4]/40 shadow-xl animate-in fade-in slide-in-from-bottom-3 duration-300">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2 text-[#6DC082] text-xs font-bold uppercase tracking-wider">
-                        <BookOpen className="w-4 h-4 text-[#6DC082]" />
+                  <div className="mt-3 sm:mt-4 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-[#4682B4]/15 border border-[#4682B4]/40 shadow-xl max-h-[26vh] overflow-y-auto pr-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5 text-[#6DC082] text-xs font-bold uppercase tracking-wider">
+                        <BookOpen className="w-3.5 h-3.5 text-[#6DC082]" />
                         <span>Workplace Rationale & Assessor Debrief</span>
                       </div>
                       <span className="text-[10px] text-slate-400">Classroom Discussion Prompt</span>
                     </div>
-                    <p className="text-sm sm:text-base text-slate-100 font-medium leading-relaxed whitespace-pre-line">
+                    <p className="text-xs sm:text-sm text-slate-100 font-medium leading-relaxed whitespace-pre-line">
                       {text}
                     </p>
                   </div>
@@ -1123,17 +1244,31 @@ export default function PresenterPage() {
             </div>
 
             {/* Bottom Live Controls Bar */}
-            <div className="pt-4 border-t border-[#1e2e4a] flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-2.5">
+            <div className="shrink-0 pt-2.5 sm:pt-3 border-t border-[#1e2e4a] flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-semibold text-slate-400 mr-1">
                   Submissions: <strong className="text-white font-mono">{responses.length}</strong> / {participants.length}
                 </span>
+
+                {/* Auto-Advance Toggle Button */}
+                <button
+                  onClick={() => setAutoAdvance(prev => !prev)}
+                  className={`px-2.5 py-1.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                    autoAdvance
+                      ? 'bg-sky-500/20 border-sky-500/50 text-sky-300'
+                      : 'bg-[#121b2d] border-[#1e2e4a] text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Auto-advance to next question when all participants have answered (blind run, no answers revealed)"
+                >
+                  <FastForward className="w-3.5 h-3.5" />
+                  <span>Auto-Next: {autoAdvance ? 'ON' : 'OFF'}</span>
+                </button>
 
                 {/* Extra time */}
                 <button
                   onClick={() => handleAddExtraTime(15)}
                   className="px-2.5 py-1.5 rounded-lg bg-[#121b2d] hover:bg-slate-800 text-xs font-semibold text-slate-200 border border-[#1e2e4a] flex items-center gap-1 transition-colors"
-                  title="Add 15 seconds to question countdown"
+                  title="Add 15 seconds to countdown"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>+15s</span>
@@ -1162,19 +1297,19 @@ export default function PresenterPage() {
                 <button
                   onClick={handleJumpToBeginningReview}
                   className="px-2.5 py-1.5 rounded-lg bg-[#121b2d] hover:bg-slate-800 text-xs font-semibold text-sky-400 border border-[#1e2e4a] flex items-center gap-1.5 transition-colors"
-                  title="Jump directly to Question 1 with answers hidden for cohort review"
+                  title="Jump directly to Question 1 for cohort review"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Q1</span>
+                  <span>Q1 Review</span>
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 sm:gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 {/* Previous Question [P] */}
                 <button
                   onClick={handlePrevQuestion}
                   disabled={session.current_question_index <= 0}
-                  className="px-3 py-2 rounded-xl bg-[#121b2d] hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-[#121b2d] text-slate-300 font-semibold text-xs border border-[#1e2e4a] flex items-center gap-1.5 transition-colors"
+                  className="px-3 py-1.5 rounded-xl bg-[#121b2d] hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-[#121b2d] text-slate-300 font-semibold text-xs border border-[#1e2e4a] flex items-center gap-1.5 transition-colors"
                   title="Previous Question [P]"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -1196,33 +1331,38 @@ export default function PresenterPage() {
                 {/* Scores Standings */}
                 <button
                   onClick={handleToggleLeaderboard}
-                  className="px-3.5 py-2 rounded-xl bg-[#121b2d] hover:bg-slate-800 text-amber-400 font-semibold text-xs border border-[#1e2e4a] flex items-center gap-1.5 transition-colors"
+                  className="px-3 py-1.5 rounded-xl bg-[#121b2d] hover:bg-slate-800 text-amber-400 font-semibold text-xs border border-[#1e2e4a] flex items-center gap-1.5 transition-colors"
                 >
                   <Trophy className="w-4 h-4 text-amber-400" />
                   <span>Scores [S]</span>
                 </button>
 
-                {/* Reveal Answer Button */}
+                {/* Reveal Answer Button / Persistent Reveal Toggle */}
                 {session.status !== 'revealed' ? (
                   <button
                     onClick={handleRevealAnswers}
-                    className="px-4 sm:px-5 py-2 rounded-xl bg-[#6DC082] hover:bg-[#5cb372] text-white font-bold text-xs shadow-lg shadow-[#6DC082]/30 flex items-center gap-2 transition-all"
+                    className="px-4 py-1.5 rounded-xl bg-[#6DC082] hover:bg-[#5cb372] text-white font-bold text-xs shadow-lg shadow-[#6DC082]/30 flex items-center gap-1.5 transition-all"
+                    title="Reveal Answers & Results [R]"
                   >
                     <Eye className="w-4 h-4" />
                     <span>Reveal Results [R]</span>
                   </button>
                 ) : (
-                  <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Revealed</span>
-                  </span>
+                  <button
+                    onClick={handleHideAnswers}
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                    title="Reveal Mode is ON (persists across Next/Prev). Click to turn off [R]"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Revealed (Click to Hide) [R]</span>
+                  </button>
                 )}
 
-                {/* Always-on Next Question [N] Button */}
+                {/* Next Question [N] Button */}
                 <button
                   onClick={handleNextQuestion}
-                  className="px-4 sm:px-5 py-2 rounded-xl bg-[#4682B4] hover:bg-[#3b6f9a] text-white font-bold text-xs shadow-lg shadow-[#4682B4]/30 flex items-center gap-2 transition-all"
-                  title="Next Question [N] (available at all times)"
+                  className="px-4 py-1.5 rounded-xl bg-[#4682B4] hover:bg-[#3b6f9a] text-white font-bold text-xs shadow-lg shadow-[#4682B4]/30 flex items-center gap-1.5 transition-all"
+                  title="Next Question [N]"
                 >
                   <span>
                     {session.current_question_index + 1 >= (session.questions?.length || 0)

@@ -212,6 +212,12 @@ function ParticipantPlayContent() {
           setStage('revealed');
         } else if (updatedSess.status === 'completed') {
           setStage('completed');
+          if (participant?.id) {
+            AppStore.fetchParticipants(updatedSess.id).then((cohort) => {
+              const myP = cohort.find(p => p.id === participant.id);
+              if (myP) setParticipant(myP);
+            });
+          }
           if (typeof window !== 'undefined') {
             localStorage.removeItem(`liveengage_participant_${updatedSess.room_code}`);
           }
@@ -220,7 +226,7 @@ function ParticipantPlayContent() {
     });
 
     return () => unsubscribe();
-  }, [session?.room_code]);
+  }, [session?.room_code, participant?.id]);
 
   // Synchronized Leaderboard & Fireworks when Facilitator triggers Scores [S]
   useEffect(() => {
@@ -228,6 +234,11 @@ function ParticipantPlayContent() {
       AppStore.fetchParticipants(session.id).then((cohort) => {
         const sorted = [...cohort].sort((a, b) => b.score - a.score);
         setCohortParticipants(sorted);
+
+        const myP = cohort.find(p => p.id === participant?.id);
+        if (myP) {
+          setParticipant(myP);
+        }
 
         const myRank = sorted.findIndex(p => p.id === participant?.id) + 1;
         if (myRank === 1 && !hasFiredFireworks) {
@@ -251,6 +262,18 @@ function ParticipantPlayContent() {
       setHasFiredFireworks(false);
     }
   }, [session?.show_leaderboard, session?.id, participant?.id, hasFiredFireworks]);
+
+  // If completed, refresh participant score to ensure final points are 100% accurate
+  useEffect(() => {
+    if (stage === 'completed' && session?.id && participant?.id) {
+      AppStore.fetchParticipants(session.id).then((cohort) => {
+        const myP = cohort.find(p => p.id === participant.id);
+        if (myP && myP.score !== participant.score) {
+          setParticipant(myP);
+        }
+      });
+    }
+  }, [stage, session?.id, participant?.id, participant?.score]);
 
   // Synchronized countdown timer based on server question_timer_end or overall_timer_end
   useEffect(() => {
@@ -310,6 +333,14 @@ function ParticipantPlayContent() {
     }
   }, [activeQIndex, session?.id, participant?.id]);
 
+  const syncMyScore = (sessionId: string, participantId: string) => {
+    const updatedParticipants = AppStore.getParticipants(sessionId);
+    const myP = updatedParticipants.find(p => p.id === participantId);
+    if (myP) {
+      setParticipant(myP);
+    }
+  };
+
   // Handle Option Selection (Blind Review: can freely toggle/change until locked)
   const handleSelectOption = async (optionIndex: number) => {
     if (!session || !currentQ || !participant) return;
@@ -341,6 +372,7 @@ function ParticipantPlayContent() {
       elapsed
     );
     setCurrentResponse(resp);
+    syncMyScore(session.id, participant.id);
   };
 
   // Cloze Gap Assignment: selectedChoices stores option indices for each gap in order: [gap1OptIdx, gap2OptIdx, ...]
@@ -377,6 +409,7 @@ function ParticipantPlayContent() {
       elapsed
     );
     setCurrentResponse(resp);
+    syncMyScore(session.id, participant.id);
   };
 
   const handleClearClozeGap = async (gapIdx: number) => {
@@ -399,6 +432,7 @@ function ParticipantPlayContent() {
         elapsed
       );
       setCurrentResponse(resp);
+      syncMyScore(session.id, participant.id);
     }
   };
 
@@ -416,6 +450,7 @@ function ParticipantPlayContent() {
       0
     );
     setCurrentResponse(resp);
+    syncMyScore(session.id, participant.id);
   };
 
   return (
@@ -889,6 +924,8 @@ function ParticipantPlayContent() {
                       className={`p-4 rounded-2xl border text-center shadow-xs ${
                         displayResp.is_correct
                           ? 'bg-[#6DC082]/15 border-[#6DC082]/40 text-[#2b773f]'
+                          : displayResp.points_awarded > 0
+                          ? 'bg-amber-50 border-amber-300 text-amber-900'
                           : 'bg-red-50 border-red-200 text-red-800'
                       }`}
                     >
@@ -897,6 +934,11 @@ function ParticipantPlayContent() {
                           <>
                             <CheckCircle2 className="w-5 h-5 text-[#6DC082]" />
                             <span className="text-base font-black">Correct Answer!</span>
+                          </>
+                        ) : displayResp.points_awarded > 0 ? (
+                          <>
+                            <CheckCircle2 className="w-5 h-5 text-amber-600" />
+                            <span className="text-base font-black">Partially Correct!</span>
                           </>
                         ) : (
                           <>
