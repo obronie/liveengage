@@ -1961,6 +1961,7 @@ export class AppStore {
       // Cascade delete associated question sets from localStorage
       const remainingClusterIds = new Set(allClusters.map(cl => cl.id));
       const allSets = this.getQuestionSets().filter(s => remainingClusterIds.has(s.cluster_id));
+      this._questionSetsCache = allSets;
       localStorage.setItem(QUESTION_SETS_STORAGE_KEY, JSON.stringify(allSets));
     }
 
@@ -2099,6 +2100,7 @@ export class AppStore {
     }
     // Also delete associated question sets
     const sets = this.getQuestionSets().filter(s => s.cluster_id !== clusterId);
+    this._questionSetsCache = sets;
     if (typeof window !== 'undefined') {
       localStorage.setItem(QUESTION_SETS_STORAGE_KEY, JSON.stringify(sets));
     }
@@ -2111,91 +2113,101 @@ export class AppStore {
     }
   }
 
-  // --- Question Set Operations (Multi-Bank) ---
+  // --- Question Set Operations (Multi-Bank with In-Memory Cache & Debounced Cloud Sync) ---
+  private static _questionSetsCache: QuestionSet[] | null = null;
+  private static _saveSetTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+
   static getQuestionSets(clusterId?: string): QuestionSet[] {
     if (typeof window === 'undefined') return INITIAL_QUESTION_SETS;
-    const raw = localStorage.getItem(QUESTION_SETS_STORAGE_KEY);
-    let all: QuestionSet[] = INITIAL_QUESTION_SETS;
-    if (raw) {
-      try {
-        all = JSON.parse(raw);
-        let changed = false;
-        // Merge missing initial sets
-        for (const initSet of INITIAL_QUESTION_SETS) {
-          const existingIdx = all.findIndex(s => s.id === initSet.id);
-          if (existingIdx === -1) {
-            all.push(initSet);
-            changed = true;
-          } else {
-            // Clean up any legacy repetitive titles like "Cluster 2.4"
-            if (all[existingIdx].title === 'Cluster 2.4') {
-              all[existingIdx].title = 'Generic Standard Assessment';
+
+    let all: QuestionSet[];
+    if (this._questionSetsCache) {
+      all = this._questionSetsCache;
+    } else {
+      const raw = localStorage.getItem(QUESTION_SETS_STORAGE_KEY);
+      all = INITIAL_QUESTION_SETS;
+      if (raw) {
+        try {
+          all = JSON.parse(raw);
+          let changed = false;
+          // Merge missing initial sets
+          for (const initSet of INITIAL_QUESTION_SETS) {
+            const existingIdx = all.findIndex(s => s.id === initSet.id);
+            if (existingIdx === -1) {
+              all.push(initSet);
               changed = true;
-            }
-            // Sync marks & total_marks for standard sets if missing or expanded
-            if (
-              !all[existingIdx].total_marks || 
-              all[existingIdx].questions.length < initSet.questions.length || 
-              all[existingIdx].questions.some(q => !q.marks)
-            ) {
-              all[existingIdx].questions = initSet.questions;
-              all[existingIdx].total_marks = initSet.total_marks;
-              all[existingIdx].time_allowed_minutes = initSet.time_allowed_minutes;
-              all[existingIdx].eisa_focus_area = initSet.eisa_focus_area;
-              changed = true;
+            } else {
+              // Clean up any legacy repetitive titles like "Cluster 2.4"
+              if (all[existingIdx].title === 'Cluster 2.4') {
+                all[existingIdx].title = 'Generic Standard Assessment';
+                changed = true;
+              }
+              // Sync marks & total_marks for standard sets if missing or expanded
+              if (
+                !all[existingIdx].total_marks || 
+                all[existingIdx].questions.length < initSet.questions.length || 
+                all[existingIdx].questions.some(q => !q.marks)
+              ) {
+                all[existingIdx].questions = initSet.questions;
+                all[existingIdx].total_marks = initSet.total_marks;
+                all[existingIdx].time_allowed_minutes = initSet.time_allowed_minutes;
+                all[existingIdx].eisa_focus_area = initSet.eisa_focus_area;
+                changed = true;
+              }
             }
           }
-        }
 
-        // Ensure every question across all sets has at least marks = 1 and total_marks is accurate
-        all.forEach(s => {
-          let sMutated = false;
-          s.questions.forEach(q => {
-            if (!q.marks || q.marks < 1) {
-              q.marks = 1;
+          // Ensure every question across all sets has at least marks = 1 and total_marks is accurate
+          all.forEach(s => {
+            let sMutated = false;
+            s.questions.forEach(q => {
+              if (!q.marks || q.marks < 1) {
+                q.marks = 1;
+                sMutated = true;
+              }
+            });
+            const sum = s.questions.reduce((tot, q) => tot + (q.marks || 1), 0);
+            if (s.total_marks !== sum) {
+              s.total_marks = sum;
               sMutated = true;
             }
+            // Normalize timing fields if missing or undefined
+            const q0 = (s.questions && s.questions[0]) ? (s.questions[0] as any) : null;
+            if (!s.timing_mode) {
+              s.timing_mode = q0?._timing_mode || (s.time_allowed_minutes && s.time_allowed_minutes > 0 && !s.questions.some(q => q.duration > 0) ? 'overall' : 'per_question');
+              sMutated = true;
+            }
+            if (s.overall_time_minutes === undefined) {
+              s.overall_time_minutes = q0?._overall_time_minutes || s.time_allowed_minutes || 20;
+              sMutated = true;
+            }
+            if (s.per_question_duration === undefined) {
+              s.per_question_duration = q0?._per_question_duration || (s.questions?.[0]?.duration > 0 ? s.questions[0].duration : 45);
+              sMutated = true;
+            }
+            if (s.is_braincert_bank === undefined && q0?._is_braincert_bank !== undefined) {
+              s.is_braincert_bank = q0._is_braincert_bank;
+              sMutated = true;
+            }
+            if (s.braincert_objective_id === undefined && q0?._braincert_objective_id !== undefined) {
+              s.braincert_objective_id = q0._braincert_objective_id;
+              sMutated = true;
+            }
+            if (sMutated) changed = true;
           });
-          const sum = s.questions.reduce((tot, q) => tot + (q.marks || 1), 0);
-          if (s.total_marks !== sum) {
-            s.total_marks = sum;
-            sMutated = true;
+          if (changed) {
+            localStorage.setItem(QUESTION_SETS_STORAGE_KEY, JSON.stringify(all));
           }
-          // Normalize timing fields if missing or undefined
-          const q0 = (s.questions && s.questions[0]) ? (s.questions[0] as any) : null;
-          if (!s.timing_mode) {
-            s.timing_mode = q0?._timing_mode || (s.time_allowed_minutes && s.time_allowed_minutes > 0 && !s.questions.some(q => q.duration > 0) ? 'overall' : 'per_question');
-            sMutated = true;
-          }
-          if (s.overall_time_minutes === undefined) {
-            s.overall_time_minutes = q0?._overall_time_minutes || s.time_allowed_minutes || 20;
-            sMutated = true;
-          }
-          if (s.per_question_duration === undefined) {
-            s.per_question_duration = q0?._per_question_duration || (s.questions?.[0]?.duration > 0 ? s.questions[0].duration : 45);
-            sMutated = true;
-          }
-          if (s.is_braincert_bank === undefined && q0?._is_braincert_bank !== undefined) {
-            s.is_braincert_bank = q0._is_braincert_bank;
-            sMutated = true;
-          }
-          if (s.braincert_objective_id === undefined && q0?._braincert_objective_id !== undefined) {
-            s.braincert_objective_id = q0._braincert_objective_id;
-            sMutated = true;
-          }
-          if (sMutated) changed = true;
-        });
-        if (changed) {
-          localStorage.setItem(QUESTION_SETS_STORAGE_KEY, JSON.stringify(all));
+        } catch {
+          all = INITIAL_QUESTION_SETS;
         }
-      } catch {
-        all = INITIAL_QUESTION_SETS;
+      } else {
+        localStorage.setItem(QUESTION_SETS_STORAGE_KEY, JSON.stringify(INITIAL_QUESTION_SETS));
       }
-    } else {
-      localStorage.setItem(QUESTION_SETS_STORAGE_KEY, JSON.stringify(INITIAL_QUESTION_SETS));
+      this._questionSetsCache = all;
     }
 
-    const filtered = clusterId ? all.filter(s => s.cluster_id === clusterId) : all;
+    const filtered = clusterId ? all.filter(s => s.cluster_id === clusterId) : [...all];
 
     // FSA Mock sets sort first, then BrainCert Bank, then Generic Standard, then Custom Workplace
     return filtered.sort((a, b) => {
@@ -2269,6 +2281,7 @@ export class AppStore {
               local.push(mergedSet);
             }
           });
+          this._questionSetsCache = local;
           if (typeof window !== 'undefined') {
             localStorage.setItem(QUESTION_SETS_STORAGE_KEY, JSON.stringify(local));
           }
@@ -2300,53 +2313,67 @@ export class AppStore {
     } else {
       all.unshift(sanitizedSet);
     }
+    this._questionSetsCache = all;
     if (typeof window !== 'undefined') {
       localStorage.setItem(QUESTION_SETS_STORAGE_KEY, JSON.stringify(all));
     }
+
     const supabase = getSupabaseClient();
     if (supabase) {
-      try {
-        // Tag questions in JSONB with timing config so Supabase retains it without needing DB schema alterations
-        const questionsWithMeta = (sanitizedSet.questions || []).map((q, idx) => ({
-          ...q,
-          duration: sanitizedSet.timing_mode === 'per_question' ? (sanitizedSet.per_question_duration || q.duration || 45) : 0,
-          ...(idx === 0 ? {
-            _timing_mode: sanitizedSet.timing_mode,
-            _overall_time_minutes: sanitizedSet.overall_time_minutes,
-            _per_question_duration: sanitizedSet.per_question_duration,
-            _is_braincert_bank: sanitizedSet.is_braincert_bank,
-            _braincert_objective_id: sanitizedSet.braincert_objective_id,
-          } : {}),
-        }));
-
-        await supabase.from('question_sets').upsert({
-          id: sanitizedSet.id,
-          cluster_id: sanitizedSet.cluster_id,
-          set_number: sanitizedSet.set_number || 1,
-          title: sanitizedSet.title,
-          is_custom: sanitizedSet.is_custom || false,
-          is_fsa_mock: sanitizedSet.is_fsa_mock || false,
-          client_name: sanitizedSet.client_name || 'Generic Standard',
-          eisa_focus_area: sanitizedSet.eisa_focus_area || null,
-          raw_notebook_extract: sanitizedSet.raw_notebook_extract || null,
-          custom_background_context: sanitizedSet.custom_background_context || null,
-          target_level: sanitizedSet.target_level || 'operational',
-          default_entry_mode: sanitizedSet.default_entry_mode || 'group',
-          total_marks: sanitizedSet.total_marks || 10,
-          time_allowed_minutes: sanitizedSet.time_allowed_minutes || 20,
-          questions: questionsWithMeta,
-          created_at: sanitizedSet.created_at,
-          updated_at: sanitizedSet.updated_at,
-        });
-      } catch (e) {
-        console.warn('Supabase saveQuestionSet failed:', e);
+      if (this._saveSetTimers[sanitizedSet.id]) {
+        clearTimeout(this._saveSetTimers[sanitizedSet.id]);
       }
+      this._saveSetTimers[sanitizedSet.id] = setTimeout(async () => {
+        try {
+          // Tag questions in JSONB with timing config so Supabase retains it without needing DB schema alterations
+          const questionsWithMeta = (sanitizedSet.questions || []).map((q, idx) => ({
+            ...q,
+            duration: sanitizedSet.timing_mode === 'per_question' ? (sanitizedSet.per_question_duration || q.duration || 45) : 0,
+            ...(idx === 0 ? {
+              _timing_mode: sanitizedSet.timing_mode,
+              _overall_time_minutes: sanitizedSet.overall_time_minutes,
+              _per_question_duration: sanitizedSet.per_question_duration,
+              _is_braincert_bank: sanitizedSet.is_braincert_bank,
+              _braincert_objective_id: sanitizedSet.braincert_objective_id,
+            } : {}),
+          }));
+
+          await supabase.from('question_sets').upsert({
+            id: sanitizedSet.id,
+            cluster_id: sanitizedSet.cluster_id,
+            set_number: sanitizedSet.set_number || 1,
+            title: sanitizedSet.title,
+            is_custom: sanitizedSet.is_custom || false,
+            is_fsa_mock: sanitizedSet.is_fsa_mock || false,
+            client_name: sanitizedSet.client_name || 'Generic Standard',
+            eisa_focus_area: sanitizedSet.eisa_focus_area || null,
+            raw_notebook_extract: sanitizedSet.raw_notebook_extract || null,
+            custom_background_context: sanitizedSet.custom_background_context || null,
+            target_level: sanitizedSet.target_level || 'operational',
+            default_entry_mode: sanitizedSet.default_entry_mode || 'group',
+            total_marks: sanitizedSet.total_marks || 10,
+            time_allowed_minutes: sanitizedSet.time_allowed_minutes || 20,
+            questions: questionsWithMeta,
+            created_at: sanitizedSet.created_at,
+            updated_at: sanitizedSet.updated_at,
+          });
+        } catch (e) {
+          console.warn('Supabase saveQuestionSet failed:', e);
+        } finally {
+          delete this._saveSetTimers[sanitizedSet.id];
+        }
+      }, 350);
     }
     return sanitizedSet;
   }
 
   static async deleteQuestionSet(questionSetId: string): Promise<void> {
+    if (this._saveSetTimers[questionSetId]) {
+      clearTimeout(this._saveSetTimers[questionSetId]);
+      delete this._saveSetTimers[questionSetId];
+    }
     const all = this.getQuestionSets().filter(s => s.id !== questionSetId);
+    this._questionSetsCache = all;
     if (typeof window !== 'undefined') {
       localStorage.setItem(QUESTION_SETS_STORAGE_KEY, JSON.stringify(all));
     }

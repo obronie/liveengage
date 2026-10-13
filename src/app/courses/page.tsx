@@ -767,6 +767,18 @@ Award 1 mark for each correctly selected term from the Word Bank (3 marks total)
 </div>`;
   };
 
+  const getBrainCertFriendlyFilename = () => {
+    const clusterNum = selectedCluster?.cluster_number || '1.1';
+    const clusterTitle = (selectedCluster?.title || 'Assessment')
+      .replace(/[<>:"/\\|?*]+/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const qCount = selectedSet?.questions?.length || 0;
+    const objId = (selectedSet?.braincert_objective_id || brainCertObjectiveId || '').trim();
+    const objSuffix = objId ? ` - Obj ${objId}` : '';
+    return `BrainCert Q-Bank - Cluster ${clusterNum} - ${clusterTitle} (${qCount} Qs${objSuffix}).csv`;
+  };
+
   const handleExportBrainCertCsv = () => {
     if (!selectedSet || !selectedSet.questions || selectedSet.questions.length === 0) {
       alert('This question set has no questions to export.');
@@ -792,7 +804,39 @@ Award 1 mark for each correctly selected term from the Word Bank (3 marks total)
       'Optional Case Sensitive'
     ];
 
-    const activeObjId = (selectedSet.braincert_objective_id || brainCertObjectiveId || '3927820').trim();
+    // Sanitize text for BrainCert PHP CSV parser & MySQL 3-byte UTF-8 compatibility
+    const sanitizeCsvField = (text: string): string => {
+      return (text || '')
+        .replace(/🟢/g, '[Answer]')
+        .replace(/📐/g, '[Calculation / Rule]')
+        .replace(/📝/g, '[Marking & Distractor Guide]')
+        .replace(/🎯/g, '')
+        .replace(/⚖️/g, '')
+        .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '') // Strip any remaining 4-byte astral emojis
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/[\u2013\u2014]/g, '-')
+        .replace(/\r?\n+/g, ' <br> ') // Single physical row per question for PHP fgetcsv stability
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/"/g, '""');
+    };
+
+    const sanitizeOptionItem = (opt: string): string => {
+      return (opt || '')
+        .replace(/\|/g, '/') // Prevent internal pipes from splitting BrainCert options
+        .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/[\u2013\u2014]/g, '-')
+        .replace(/\r?\n+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
+
+    const activeObjId = (selectedSet.braincert_objective_id || brainCertObjectiveId || '3927820')
+      .replace(/[^0-9a-zA-Z_-]/g, '')
+      .trim() || '3927820';
 
     const rows = selectedSet.questions.map((q) => {
       // BrainCert Question Type Mapping:
@@ -801,11 +845,12 @@ Award 1 mark for each correctly selected term from the Word Bank (3 marks total)
       // 4 = Multiple Answer Checkboxes (MULTIPLE)
       // 5 = True/False (BINARY)
       let questionTypeId = '2';
-      let rawTitle = q.body.replace(/\[1\]|\[2\]|\[3\]/g, '_____');
+      let rawTitle = (q.body || '').replace(/\[1\]|\[2\]|\[3\]/g, '_____');
       let optionsStr = '';
       let answerText = '';
 
-      const optionsList = q.options && q.options.length > 0 ? [...q.options] : ['Option A', 'Option B', 'Option C', 'Option D'];
+      const rawOptions = q.options && q.options.length > 0 ? q.options : ['Option A', 'Option B', 'Option C', 'Option D'];
+      const optionsList = rawOptions.map(sanitizeOptionItem).filter(Boolean);
 
       if (q.format === 'CLOZE') {
         questionTypeId = '1'; // Fill in the Blanks
@@ -815,15 +860,15 @@ Award 1 mark for each correctly selected term from the Word Bank (3 marks total)
           const cleanHint = q.guide_topic_hint.replace(/^CLOZE::/, '');
           const parts = cleanHint.split('::');
           if (parts[0]) {
-            targetAns = parts[0].split('|')[0] || targetAns;
+            targetAns = sanitizeOptionItem(parts[0].split('|')[0]) || targetAns;
           }
         }
         // Embed Word Bank in stem if not already present and not a pure numeric prompt
         if (optionsList.length > 1 && !rawTitle.toLowerCase().includes('word bank') && !rawTitle.toLowerCase().includes('type number')) {
-          rawTitle = `${rawTitle} [Word Bank: ${optionsList.join(' | ')}]`;
+          rawTitle = `${rawTitle} [Word Bank: ${optionsList.join(' / ')}]`;
         }
         optionsStr = ''; // Type 1 Fill in the Blanks has empty options column
-        answerText = targetAns.trim().replace(/"/g, '""');
+        answerText = targetAns.replace(/"/g, '""');
       } else if (q.format === 'MULTIPLE') {
         questionTypeId = '4'; // Multiple Answer (Checkboxes)
         const correctIndices = q.correct_options && q.correct_options.length > 0 ? q.correct_options : [0, 1];
@@ -844,8 +889,10 @@ Award 1 mark for each correctly selected term from the Word Bank (3 marks total)
         answerText = (optionsList[correctIdx] || optionsList[0] || '').replace(/"/g, '""');
       }
 
-      const questionTitle = rawTitle.replace(/"/g, '""');
-      const explanation = (q.additional_text || `Correct Answer: ${answerText}. Follows standard workplace operating procedure.`).replace(/"/g, '""');
+      const questionTitle = sanitizeCsvField(rawTitle);
+      const explanation = sanitizeCsvField(
+        q.additional_text || `Correct Answer: ${answerText.replace(/""/g, '"')}. Follows standard workplace operating procedure.`
+      );
 
       const difficulty = '2'; // NQF Level 3 Moderate
       const status = '1'; // Published/Active
@@ -862,7 +909,7 @@ Award 1 mark for each correctly selected term from the Word Bank (3 marks total)
         difficulty,
         status,
         includeInDemo,
-        '', '', '', '', '', '' // Cols 10-15
+        '', '', '', '', '', '' // Cols 11-16
       ].join(',');
     });
 
@@ -871,9 +918,7 @@ Award 1 mark for each correctly selected term from the Word Bank (3 marks total)
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    const clusterNum = selectedCluster?.cluster_number || '1';
-    const cleanTitle = (selectedSet.title || `Cluster_${clusterNum}_EISA_Bank`).replace(/[^a-zA-Z0-9_-]/g, '_');
-    link.setAttribute('download', `${cleanTitle}_BrainCert_Import.csv`);
+    link.setAttribute('download', getBrainCertFriendlyFilename());
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -3748,7 +3793,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-[#1e3a5f] block">
-                        BrainCert Objective ID (Column 1 of CSV)
+                        BrainCert Objective ID (Column 6 of CSV)
                       </label>
                       <div className="flex items-center gap-2">
                         <input
@@ -3786,7 +3831,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                               Step 3 • Multi-Format Question Bank Verification
                             </span>
                             <h3 className="text-sm font-extrabold text-slate-800 pt-1">
-                              Active Question Set: {selectedSet.title} ({selectedSet.questions.length} Total Questions)
+                              {selectedSet.title} ({selectedSet.questions.length} Questions)
                             </h3>
                           </div>
                           <div className="flex items-center gap-2">
@@ -3797,7 +3842,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                               title="Append 10 ready-to-use multi-format QCTO EISA questions (Types 1, 2, 4, 5)"
                             >
                               <Plus className="w-3.5 h-3.5 text-amber-700" />
-                              <span>{pilotAddedSuccess ? '✓ Added 10 Multi-Format Pilot Qs!' : '+ Append 10 Multi-Format Pilot Qs'}</span>
+                              <span>{pilotAddedSuccess ? '✓ Added 10 Pilot Qs!' : '+ Append 10 Pilot Qs'}</span>
                             </button>
                             <button
                               type="button"
@@ -3810,7 +3855,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                               className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-[#1e3a5f] border border-[#4682B4]/30 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5"
                             >
                               <Sparkles className="w-3.5 h-3.5 text-[#4682B4]" />
-                              <span>1-Click Generate Full 60-Q Pool</span>
+                              <span>Generate 60-Q Pool</span>
                             </button>
                           </div>
                         </div>
@@ -3819,29 +3864,34 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                           <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                             <div className="text-[10px] font-extrabold uppercase text-[#4682B4]">Type ID = 2 • MCQ</div>
                             <div className="text-lg font-extrabold text-slate-900 mt-0.5">{type2Count} Qs</div>
-                            <div className="text-[11px] text-slate-500">Single Best Workplace Action (~40% target)</div>
+                            <div className="text-[11px] text-slate-500">Single Choice (~40%)</div>
                           </div>
                           <div className="p-3 rounded-lg bg-emerald-50/60 border border-emerald-200">
                             <div className="text-[10px] font-extrabold uppercase text-emerald-800">Type ID = 1 • Fill in Blank</div>
                             <div className="text-lg font-extrabold text-emerald-950 mt-0.5">{type1Count} Qs</div>
-                            <div className="text-[11px] text-emerald-800">Cloze w/ Word Bank or Pre-Supplied Unit (~25%)</div>
+                            <div className="text-[11px] text-emerald-800">Cloze / Numeric (~25%)</div>
                           </div>
                           <div className="p-3 rounded-lg bg-purple-50/60 border border-purple-200">
                             <div className="text-[10px] font-extrabold uppercase text-purple-800">Type ID = 4 • Multi-Answer</div>
                             <div className="text-lg font-extrabold text-purple-950 mt-0.5">{type4Count} Qs</div>
-                            <div className="text-[11px] text-purple-800">Select 2/3 Checkboxes + Partial Credit (~20%)</div>
+                            <div className="text-[11px] text-purple-800">Checkboxes (~20%)</div>
                           </div>
                           <div className="p-3 rounded-lg bg-amber-50/60 border border-amber-200">
                             <div className="text-[10px] font-extrabold uppercase text-amber-800">Type ID = 5 • True / False</div>
                             <div className="text-lg font-extrabold text-amber-950 mt-0.5">{type5Count} Qs</div>
-                            <div className="text-[11px] text-amber-800">Rapid SOP &amp; Safety Verification (~15%)</div>
+                            <div className="text-[11px] text-amber-800">SOP Verification (~15%)</div>
                           </div>
                         </div>
 
                         {/* Export Call to Action */}
                         <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100">
-                          <div className="text-xs text-slate-600">
-                            Exports a strict <strong>8-column RFC 4180 CSV</strong> compatible with BrainCert&apos;s Question Bank importer (pipes <code className="bg-slate-100 px-1 rounded">|</code> for options, empty options column for Type 1 Fill-in-the-Blanks, and full 3-part explanations).
+                          <div className="text-xs text-slate-600 space-y-0.5">
+                            <div>
+                              Format: <strong>16-Column BrainCert RFC 4180 CSV</strong> (single-line rows, MySQL UTF-8 safe).
+                            </div>
+                            <div className="font-mono text-[11px] text-[#1e3a5f] font-semibold">
+                              📄 {getBrainCertFriendlyFilename()}
+                            </div>
                           </div>
                           <button
                             type="button"

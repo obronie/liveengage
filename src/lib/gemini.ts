@@ -314,13 +314,28 @@ export function getSampleOccupationalQuestions(topic: string = 'General', count:
   return expanded;
 }
 
-// Model fallback cascade starting with 3.8 flash
+// Real production Gemini Flash models (eliminates 404 roundtrips from UI display aliases)
 const MODEL_CASCADE = [
-  'gemini-3.8-flash',
-  'gemini-3.7-flash',
-  'gemini-3.6-flash',
   'gemini-2.5-flash',
   'gemini-2.0-flash',
+];
+
+function resolveGeminiModel(requested?: string): string {
+  if (!requested) return 'gemini-2.5-flash';
+  if (
+    requested === 'gemini-3.8-flash' ||
+    requested === 'gemini-3.7-flash' ||
+    requested === 'gemini-3.6-flash'
+  ) {
+    return 'gemini-2.5-flash';
+  }
+  return requested;
+}
+
+const BATCH_VARIANT_DIRECTIVES = [
+  'BATCH VARIANT A (Questions 1–20 — Core Operations, Inbound Verification & SOPs): Focus primarily on receiving verification, PO vs. Delivery Note vs. GRN matching, foundational terminology, storage/housekeeping standards, and first-line compliance checks.',
+  'BATCH VARIANT B (Questions 21–40 — Quantitative Calculations, Variances & Safety Thresholds): Focus heavily on numerical workplace calculations (pallet tier/layer counts, volumetric vs. scale weight, % shrinkage, discrepancy credit note claims, 15% VAT, cold-chain temperature limits) using fresh numerical values.',
+  'BATCH VARIANT C (Questions 41–60 — Exception Handling, Dispatch, MHE & Audit Scenarios): Focus on non-conformance troubleshooting, damaged/leaking stock quarantine, Material Handling Equipment (MHE) selection & tag-out protocols, multi-fault rejections, and high-value stock security.',
 ];
 
 export async function generateQuestionsWithGemini(
@@ -334,14 +349,38 @@ export async function generateQuestionsWithGemini(
     return getSampleOccupationalQuestions(request.clusterTitle || request.prompt, count);
   }
 
-  // Parallel batching for large pools (e.g. 60-question BrainCert bank) to prevent JSON truncation
-  if (count > 25) {
-    const half = Math.ceil(count / 2);
-    const [batch1, batch2] = await Promise.all([
-      generateQuestionsWithGemini({ ...request, questionCount: half }),
-      generateQuestionsWithGemini({ ...request, questionCount: count - half }),
-    ]);
-    return [...batch1, ...batch2];
+  // Parallel distinct-angle batching for large pools (e.g. 60-question BrainCert bank -> 3x20)
+  if (count > 20) {
+    const batchSize = 20;
+    const numBatches = Math.ceil(count / batchSize);
+    const batchPromises: Promise<AIGeneratedQuestion[]>[] = [];
+
+    for (let i = 0; i < numBatches; i++) {
+      const currentCount = i === numBatches - 1 ? count - i * batchSize : batchSize;
+      const variantDirective = BATCH_VARIANT_DIRECTIVES[i % BATCH_VARIANT_DIRECTIVES.length];
+      batchPromises.push(
+        generateQuestionsWithGemini({
+          ...request,
+          questionCount: currentCount,
+          customBackground: [request.customBackground, variantDirective].filter(Boolean).join('\n\n'),
+        })
+      );
+    }
+
+    const batchResults = await Promise.all(batchPromises);
+    const combined = batchResults.flat();
+
+    // Deduplicate by normalized question stem to guarantee a unique rotation pool
+    const seenStems = new Set<string>();
+    const unique: AIGeneratedQuestion[] = [];
+    for (const q of combined) {
+      const normKey = q.body.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 80);
+      if (!seenStems.has(normKey)) {
+        seenStems.add(normKey);
+        unique.push(q);
+      }
+    }
+    return unique.length >= Math.min(count, 10) ? unique.slice(0, count) : combined.slice(0, count);
   }
 
   // Determine cognitive level guidance
@@ -374,11 +413,11 @@ export async function generateQuestionsWithGemini(
    📝 How the Assessor Marks This:
    [Detail point allocations, what the external national examiner awards marks for, and common learner traps or incorrect assumptions].`
     : request.isBrainCertBank
-      ? `BRAINCERT LMS MULT-FORMAT EISA QUESTION BANK MODE (60-QUESTION POOL):
+      ? `BRAINCERT LMS MULTI-FORMAT EISA QUESTION BANK MODE:
 1. MULTI-FORMAT DISTRIBUTION: Generate a varied mix across BrainCert's auto-assessed question types:
    - ~40% Single-Select MCQ ('MCQ'): Realistic warehouse scenario stems and calculated distractors.
-   - ~25% Fill in the Blanks ('CLOZE'): Using TWO distinct templates:
-     * Template A (Terminology): Embed a clear Word Bank directly in the question stem, e.g. "Complete the SOP rule from the Word Bank [GRN | Delivery Note | Purchase Order | Credit Note]: Only undamaged stock is entered on the [1]." (Options: ["GRN", "Delivery Note", "Purchase Order", "Credit Note"], correctOptions: [0]).
+   - ~25% Fill in the Blanks ('CLOZE'): Must contain a SINGLE blank marked as [1] (BrainCert Type 1 grades a single exact answer string). Use TWO templates:
+     * Template A (Terminology): Embed a clear Word Bank directly in the question stem, e.g. "Complete the SOP rule from the Word Bank [GRN / Delivery Note / Purchase Order / Credit Note]: Only undamaged stock is entered on the [1]." (Options: ["GRN", "Delivery Note", "Purchase Order", "Credit Note"], correctOptions: [0]).
      * Template B (Calculations): Pre-supply units outside the blank, e.g. "A pallet holds 8 cartons per layer x 5 layers high. Staging 160 cartons requires [1] full pallets. (Type number only)" (Options: ["4", "3", "5", "20"], correctOptions: [0]).
    - ~20% Multiple Answer Checkboxes ('MULTIPLE'): Checklist items testing multiple simultaneous compliance actions. MANDATORY: The question stem MUST end with "(Select 2)" or "(Select 3)".
    - ~15% True/False ('BINARY'): Rapid regulatory and HACCP safety threshold statements.
@@ -391,6 +430,10 @@ export async function generateQuestionsWithGemini(
       : `6. WORKPLACE RATIONALE & SCORING: In "additionalText", format with:
    🟢 Model Answer: [Exact answer/calculation steps]
    📝 How the Assessor Marks This: [Why correct & where marks are awarded].`;
+
+  const clozeRule = request.isBrainCertBank
+    ? `6. "FILL IN THE BLANK" (CLOZE) FORMAT FOR BRAINCERT TYPE 1: When generating 'CLOZE' format for BrainCert, the 'body' must have a SINGLE gap marked as [1]. The 'options' array must contain the exact correct answer at index 0 plus 3 plausible distractors, and 'correctOptions' must be [0].`
+    : `6. "FILL IN THE GAP" (CLOZE) FORMAT: When generating 'CLOZE' format, the 'body' must be an occupational procedure or regulation passage with gaps marked as [1], [2], and optionally [3]. The 'options' array is the Word Bank containing the correct words/phrases plus 1-2 plausible distractors. The 'correctOptions' array contains the zero-based indexes of the options corresponding to gap [1], [2], [3] in order. Award 1 mark per gap.`;
 
   const systemInstruction = `YOU ARE: An Expert Occupational Curriculum & Live Classroom Assessment Designer.
 YOUR OBJECTIVE: Generate high-impact live polling and quiz questions for adult workplace learners (teams and individuals).
@@ -406,7 +449,7 @@ CRITICAL FRAMING RULES & STEM VARIETY:
 3. PLAUSIBLE DISTRACTORS: For MCQ/MULTIPLE, wrong choices must represent genuine, realistic workplace misconceptions, calculation pitfalls, or commonly confused numbers/terms. Never use obvious joke options.
 4. BALANCED POSITIONS: Distribute correct options roughly evenly across option positions (A, B, C, D). Avoid always making the second option correct.
 5. STANDALONE STRINGS: Never include order prefixes like "1.", "2.", "A." or "Step 1:" in the options array.
-6. "FILL IN THE GAP" (CLOZE) FORMAT: When generating 'CLOZE' format, the 'body' must be an occupational procedure or regulation passage with gaps marked as [1], [2], and optionally [3]. The 'options' array is the Word Bank containing the correct words/phrases plus 1-2 plausible distractors. The 'correctOptions' array contains the zero-based indexes of the options corresponding to gap [1], [2], [3] in order. Award 1 mark per gap.
+${clozeRule}
 ${fsaDirective}
 7. RECOMMENDED DURATION: 30s (Binary/True-False), 45s (Standard MCQ), 60s (Multiple Choice/Calculations), 90s (Complex Workplace Scenarios).
 8. MARKS ALLOCATION: Allocate realistic integer marks per question: 1 mark for basic recall / SOP rules, 2 to 3 marks for multi-step math calculations (e.g. 15% VAT, delivery note variance, CRAVED shrinkage) or applied workplace scenarios.
@@ -414,7 +457,7 @@ ${fsaDirective}
 Return ONLY a valid JSON array of question objects adhering strictly to the response schema.`;
 
   // Build the rich context from Curriculum Framework + Gemini Notebook modular extractions
-  let contextParts: string[] = [];
+  const contextParts: string[] = [];
 
   if (request.courseCode || request.courseTitle) {
     contextParts.push(`COURSE: ${request.courseCode || ''} - ${request.courseTitle || 'Occupational Training'}`);
@@ -442,7 +485,7 @@ Return ONLY a valid JSON array of question objects adhering strictly to the resp
   }
 
   if (request.customBackground && request.customBackground.trim()) {
-    contextParts.push(`\n=== 5. CUSTOM CLIENT WORKPLACE REALITY ===\nTailor scenarios and terminology to this exact operational context:\n"${request.customBackground.trim()}"`);
+    contextParts.push(`\n=== 5. CUSTOM CLIENT WORKPLACE REALITY / BATCH FOCUS ===\n${request.customBackground.trim()}`);
   }
 
   if (request.isFsaMock) {
@@ -503,9 +546,9 @@ Ensure each question connects the official Curriculum outcomes to the practical 
 
   const ai = new GoogleGenAI({ apiKey });
 
-  // Priority model queue starting with requested model or gemini-3.8-flash
-  const requestedModel = request.model || 'gemini-3.8-flash';
-  const modelsToTry = [requestedModel, ...MODEL_CASCADE.filter(m => m !== requestedModel)];
+  // Resolve real production model to avoid 404 latency
+  const resolvedPrimary = resolveGeminiModel(request.model);
+  const modelsToTry = [resolvedPrimary, ...MODEL_CASCADE.filter(m => m !== resolvedPrimary)];
 
   for (const modelName of modelsToTry) {
     try {
@@ -525,7 +568,7 @@ Ensure each question connects the official Curriculum outcomes to the practical 
 
       if (Array.isArray(parsed) && parsed.length > 0) {
         // Post-processing normalizer
-        return parsed.map((q, idx) => {
+        return parsed.map((q) => {
           // Normalise options
           if (!Array.isArray(q.options)) q.options = [];
           if (!Array.isArray(q.correctOptions)) q.correctOptions = [];
@@ -548,12 +591,14 @@ Ensure each question connects the official Curriculum outcomes to the practical 
           if (q.format === 'CLOZE') {
             if (!Array.isArray(q.options) || q.options.length === 0) {
               q.options = ['Standard Operating Procedure', 'Quality Quarantine', 'Delivery Note'];
-              q.correctOptions = [0, 1];
+              q.correctOptions = [0];
             }
             if (!Array.isArray(q.correctOptions) || q.correctOptions.length === 0) {
               q.correctOptions = [0];
             }
-            q.marks = Math.max(1, q.correctOptions.length);
+            if (!q.marks || q.marks < 1) {
+              q.marks = Math.max(2, q.correctOptions.length);
+            }
           }
 
           // Enforce timing defaults
@@ -573,5 +618,5 @@ Ensure each question connects the official Curriculum outcomes to the practical 
   }
 
   console.error('All Gemini Flash models in cascade failed. Falling back to preloaded occupational question bank.');
-  return getSampleOccupationalQuestions(request.clusterTitle || request.prompt);
+  return getSampleOccupationalQuestions(request.clusterTitle || request.prompt, count);
 }
