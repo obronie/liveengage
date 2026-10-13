@@ -254,10 +254,64 @@ export function getSampleOccupationalQuestions(topic: string = 'General', count:
       correctOptions: [],
       duration: 45,
       guideTopicHint: 'Loss Prevention & Customer Service'
+    },
+    {
+      format: 'CLOZE',
+      body: 'Complete the receiving SOP rule using the Word Bank [GRN | Delivery Note | Purchase Order | Credit Request]: Only undamaged, physically verified stock may be entered onto the [1] as accepted into inventory.',
+      additionalText: '🟢 Correct Answer: GRN (Goods Received Note).\n📐 Rule (KM-03): Only physically verified, undamaged stock is booked into inventory via the GRN. Damaged stock is rejected on the Delivery Note.',
+      options: ['GRN', 'Delivery Note', 'Purchase Order', 'Credit Request'],
+      correctOptions: [0],
+      duration: 60,
+      marks: 2,
+      guideTopicHint: 'CLOZE::GRN::GRN|Delivery Note|Purchase Order|Credit Request'
+    },
+    {
+      format: 'CLOZE',
+      body: 'A factory pallet holds 8 cartons per layer, stacked 5 layers high. To stage an outbound order of 160 cartons, the dispatch clerk must prepare [1] full pallets. (Type number only)',
+      additionalText: '🟢 Correct Answer: 4.\n📐 Calculation: Step 1: 8 cartons/layer x 5 layers = 40 cartons/pallet. Step 2: 160 / 40 = 4 full pallets.',
+      options: ['4', '3', '5', '20'],
+      correctOptions: [0],
+      duration: 60,
+      marks: 3,
+      guideTopicHint: 'CLOZE::4::4|3|5|20'
+    },
+    {
+      format: 'MCQ',
+      body: 'A carton measuring 60cm x 50cm x 40cm weighs 14kg on the scale. The courier volumetric divisor is 5000. What is the volumetric weight, and which weight will the carrier bill for?',
+      additionalText: '🟢 Correct Answer: 24kg, billed at volumetric weight.\n📐 Calculation: (60 x 50 x 40) / 5000 = 120,000 / 5000 = 24kg. Carriers bill on the greater of actual weight (14kg) vs volumetric weight (24kg).',
+      options: [
+        '14kg, billed at actual weight',
+        '24kg, billed at volumetric weight',
+        '12kg, billed at actual weight',
+        '30kg, billed at volumetric weight'
+      ],
+      correctOptions: [1],
+      duration: 60,
+      marks: 3,
+      guideTopicHint: 'Volumetric Weight Billing (KM-04-KT02)'
+    },
+    {
+      format: 'MCQ',
+      body: 'A paper mill receiving clerk checks a delivery of industrial strapping rolls invoiced at R350 per roll. The delivery note lists 60 rolls. A physical tally confirms only 52 rolls on the pallet. What monetary value must be recorded on the Discrepancy / Credit Request Note?',
+      additionalText: '🟢 Correct Answer: R2,800.\n📐 Calculation: Step 1: 60 invoiced - 52 received = 8 missing rolls. Step 2: 8 rolls x R350 = R2,800 discrepancy claim value.\n📝 Distractor Review: R21,000 is total invoice value; R18,200 is accepted stock value; R3,500 assumes 10 missing rolls.',
+      options: ['R2,800', 'R21,000', 'R18,200', 'R3,500'],
+      correctOptions: [0],
+      duration: 60,
+      marks: 3,
+      guideTopicHint: 'Discrepancy Claim Valuation (KM-02, PM-03)'
     }
   ];
 
-  return pool.slice(0, Math.min(count, pool.length));
+  if (count <= pool.length) {
+    return pool.slice(0, count);
+  }
+
+  const expanded: AIGeneratedQuestion[] = [];
+  for (let i = 0; i < count; i++) {
+    const template = pool[i % pool.length];
+    expanded.push({ ...template });
+  }
+  return expanded;
 }
 
 // Model fallback cascade starting with 3.8 flash
@@ -278,6 +332,16 @@ export async function generateQuestionsWithGemini(
   if (!apiKey || apiKey.trim() === '' || apiKey.includes('your-gemini')) {
     console.warn('No Gemini API key provided. Using rich occupational curriculum fallback questions.');
     return getSampleOccupationalQuestions(request.clusterTitle || request.prompt, count);
+  }
+
+  // Parallel batching for large pools (e.g. 60-question BrainCert bank) to prevent JSON truncation
+  if (count > 25) {
+    const half = Math.ceil(count / 2);
+    const [batch1, batch2] = await Promise.all([
+      generateQuestionsWithGemini({ ...request, questionCount: half }),
+      generateQuestionsWithGemini({ ...request, questionCount: count - half }),
+    ]);
+    return [...batch1, ...batch2];
   }
 
   // Determine cognitive level guidance
@@ -309,7 +373,22 @@ export async function generateQuestionsWithGemini(
 
    📝 How the Assessor Marks This:
    [Detail point allocations, what the external national examiner awards marks for, and common learner traps or incorrect assumptions].`
-    : `6. WORKPLACE RATIONALE & SCORING: In "additionalText", format with:
+    : request.isBrainCertBank
+      ? `BRAINCERT LMS MULT-FORMAT EISA QUESTION BANK MODE (60-QUESTION POOL):
+1. MULTI-FORMAT DISTRIBUTION: Generate a varied mix across BrainCert's auto-assessed question types:
+   - ~40% Single-Select MCQ ('MCQ'): Realistic warehouse scenario stems and calculated distractors.
+   - ~25% Fill in the Blanks ('CLOZE'): Using TWO distinct templates:
+     * Template A (Terminology): Embed a clear Word Bank directly in the question stem, e.g. "Complete the SOP rule from the Word Bank [GRN | Delivery Note | Purchase Order | Credit Note]: Only undamaged stock is entered on the [1]." (Options: ["GRN", "Delivery Note", "Purchase Order", "Credit Note"], correctOptions: [0]).
+     * Template B (Calculations): Pre-supply units outside the blank, e.g. "A pallet holds 8 cartons per layer x 5 layers high. Staging 160 cartons requires [1] full pallets. (Type number only)" (Options: ["4", "3", "5", "20"], correctOptions: [0]).
+   - ~20% Multiple Answer Checkboxes ('MULTIPLE'): Checklist items testing multiple simultaneous compliance actions. MANDATORY: The question stem MUST end with "(Select 2)" or "(Select 3)".
+   - ~15% True/False ('BINARY'): Rapid regulatory and HACCP safety threshold statements.
+   - DO NOT generate 'WORD_CLOUD' or 'SCALE'.
+2. METACOGNITIVE REMEDIATION IN "additionalText":
+   Format every explanation strictly with:
+   🟢 Correct Answer: [Exact target option or number]
+   📐 Rule / Calculation: [Exact SOP rule or step-by-step arithmetic]
+   📝 Distractor Review: [Why each incorrect option is a trap]`
+      : `6. WORKPLACE RATIONALE & SCORING: In "additionalText", format with:
    🟢 Model Answer: [Exact answer/calculation steps]
    📝 How the Assessor Marks This: [Why correct & where marks are awarded].`;
 

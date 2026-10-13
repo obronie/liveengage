@@ -2175,6 +2175,14 @@ export class AppStore {
             s.per_question_duration = q0?._per_question_duration || (s.questions?.[0]?.duration > 0 ? s.questions[0].duration : 45);
             sMutated = true;
           }
+          if (s.is_braincert_bank === undefined && q0?._is_braincert_bank !== undefined) {
+            s.is_braincert_bank = q0._is_braincert_bank;
+            sMutated = true;
+          }
+          if (s.braincert_objective_id === undefined && q0?._braincert_objective_id !== undefined) {
+            s.braincert_objective_id = q0._braincert_objective_id;
+            sMutated = true;
+          }
           if (sMutated) changed = true;
         });
         if (changed) {
@@ -2189,12 +2197,13 @@ export class AppStore {
 
     const filtered = clusterId ? all.filter(s => s.cluster_id === clusterId) : all;
 
-    // FSA Mock sets sort first, then Generic Standard, then Custom Workplace
+    // FSA Mock sets sort first, then BrainCert Bank, then Generic Standard, then Custom Workplace
     return filtered.sort((a, b) => {
       const getPriority = (s: QuestionSet) => {
         if (s.is_fsa_mock) return 0;
-        if (!s.is_custom || s.client_name === 'Generic Standard') return 1;
-        return 2;
+        if (s.is_braincert_bank) return 1;
+        if (!s.is_custom || s.client_name === 'Generic Standard') return 2;
+        return 3;
       };
       const prioDiff = getPriority(a) - getPriority(b);
       if (prioDiff !== 0) return prioDiff;
@@ -2240,12 +2249,17 @@ export class AppStore {
               || q0?._per_question_duration
               || (remoteSet.questions?.[0]?.duration > 0 ? remoteSet.questions[0].duration : 45);
 
+            const is_braincert_bank = existing?.is_braincert_bank ?? (remoteSet.is_braincert_bank || q0?._is_braincert_bank || false);
+            const braincert_objective_id = existing?.braincert_objective_id || remoteSet.braincert_objective_id || q0?._braincert_objective_id || '3927820';
+
             const mergedSet: QuestionSet = {
               ...(existing || {}),
               ...remoteSet,
               timing_mode,
               overall_time_minutes,
               per_question_duration,
+              is_braincert_bank,
+              braincert_objective_id,
               time_allowed_minutes: timing_mode === 'overall' ? overall_time_minutes : (remoteSet.time_allowed_minutes || existing?.time_allowed_minutes || 20),
             };
 
@@ -2300,6 +2314,8 @@ export class AppStore {
             _timing_mode: sanitizedSet.timing_mode,
             _overall_time_minutes: sanitizedSet.overall_time_minutes,
             _per_question_duration: sanitizedSet.per_question_duration,
+            _is_braincert_bank: sanitizedSet.is_braincert_bank,
+            _braincert_objective_id: sanitizedSet.braincert_objective_id,
           } : {}),
         }));
 

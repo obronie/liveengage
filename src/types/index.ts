@@ -51,6 +51,8 @@ export interface QuestionSet {
   title: string; // e.g. "Generic Standard Set" or "Spur - Montague Gardens"
   is_custom: boolean;
   is_fsa_mock?: boolean;
+  is_braincert_bank?: boolean;
+  braincert_objective_id?: string;
   client_name?: string; // e.g. "Spur Corporation" or "Generic Standard"
   eisa_focus_area?: string; // e.g. "Focus Area 1: Receiving Stock (50%)"
   // Persistent source notes kept for future reference
@@ -180,6 +182,7 @@ export interface GenerateQuestionsRequest {
   practicalActivitiesNotes?: string;
   customBackground?: string; // e.g. Spur Montague Gardens
   isFsaMock?: boolean;
+  isBrainCertBank?: boolean;
   questionCount?: number;
   targetLevel?: CognitiveTargetLevel;
   formats?: QuestionFormat[];
