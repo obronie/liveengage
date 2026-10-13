@@ -389,6 +389,12 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
     if (target) {
       setTargetClusterId(target.id);
       setQuestionCount(target.recommended_question_count || 10);
+      // Auto-load saved Notebook Extract from any existing set in this cluster if current extract is empty
+      const existingClusterSets = AppStore.getQuestionSets(target.id);
+      const savedExtract = existingClusterSets.find(s => s.raw_notebook_extract && s.raw_notebook_extract.trim().length > 0)?.raw_notebook_extract;
+      if (savedExtract && !notebookExtract.trim()) {
+        setNotebookExtract(savedExtract);
+      }
     } else {
       setTargetClusterId('new');
       setQuestionCount(10);
@@ -396,6 +402,10 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
     setIsFsaMockSet(false);
     setIsCustomSet(false);
     setIsBrainCertBankSet(false);
+    setTargetLevel('operational');
+    setDefaultEntryMode('group');
+    setTimingMode('overall');
+    setOverallTimeMinutes(20);
     setClientName('Generic Standard');
     setSetTitle('Generic Standard Assessment');
     setShowGeneratorModal(true);
@@ -2406,284 +2416,421 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white border border-[#D5E3EF] rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden p-6 space-y-4 my-8">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div>
-                <span className="text-xs font-bold text-[#4682B4] uppercase tracking-wider">
-                  Gemini 3.8 Flash AI Engine
-                </span>
-                <h3 className="text-lg font-bold text-slate-800">
-                  Generate Question Set
-                </h3>
-              </div>
+              <h3 className="text-lg font-bold text-slate-800">
+                Generate Question Set
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowGeneratorModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                title="Close modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <form onSubmit={handleGenerateQuestionSet} className="space-y-4">
-              {/* Cluster Selection (Existing or New inline) */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                      <label className="text-xs font-bold text-slate-700 block">
-                        1. Target Cluster Topic:
-                      </label>
-                      <select
-                        value={targetClusterId}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setTargetClusterId(val);
-                          const cl = clusters.find(c => c.id === val);
-                          if (cl?.recommended_question_count && !isBrainCertBankSet) {
-                            setQuestionCount(cl.recommended_question_count);
+            <form onSubmit={handleGenerateQuestionSet} className="space-y-3.5">
+              {/* Row 1: Target Cluster Topic (Left, shorter) + Client Association / Scope / Objective ID (Right) */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
+                  {/* Left: Target Cluster Topic (7 cols) */}
+                  <div className="sm:col-span-7">
+                    <label className="text-xs font-bold text-slate-700 mb-1 block">
+                      1. Target Cluster Topic
+                    </label>
+                    <select
+                      value={targetClusterId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setTargetClusterId(val);
+                        const cl = clusters.find(c => c.id === val);
+                        if (cl) {
+                          const existingClusterSets = AppStore.getQuestionSets(cl.id);
+                          const savedExtract = existingClusterSets.find(s => s.raw_notebook_extract && s.raw_notebook_extract.trim().length > 0)?.raw_notebook_extract;
+                          if (savedExtract && !notebookExtract.trim()) {
+                            setNotebookExtract(savedExtract);
                           }
-                          if (isFsaMockSet) {
-                            const num = cl ? cl.cluster_number : 'New';
-                            setSetTitle(`Cluster ${num} — Generic IAC FSA Mock Exam`);
-                            setClientName(`Cluster ${num} IACs Only`);
-                          } else if (isBrainCertBankSet) {
-                            const num = cl ? cl.cluster_number : 'New';
-                            setSetTitle(`Cluster ${num} — BrainCert EISA Question Bank (60 Qs)`);
-                            setClientName(`BrainCert EISA Pool • Cluster ${num}`);
-                          }
-                        }}
-                        className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-[#4682B4]"
-                      >
-                        {clusters.map((cl) => (
-                          <option key={cl.id} value={cl.id}>
-                            Cluster {cl.cluster_number} — {cl.title}
-                          </option>
-                        ))}
-                        <option value="new">+ Create New Cluster...</option>
-                      </select>
+                        }
+                        if (isBrainCertBankSet) {
+                          setQuestionCount(60);
+                          const num = cl ? cl.cluster_number : 'New';
+                          setSetTitle(`Cluster ${num} — BrainCert EISA Question Bank (60 Qs)`);
+                          setClientName(`BrainCert EISA Pool • Cluster ${num}`);
+                        } else if (isFsaMockSet) {
+                          setQuestionCount(cl?.recommended_question_count ? Math.max(12, cl.recommended_question_count) : 15);
+                          const num = cl ? cl.cluster_number : 'New';
+                          setSetTitle(`Cluster ${num} — Generic IAC FSA Mock Exam`);
+                          setClientName(`Cluster ${num} IACs Only`);
+                        } else if (cl?.recommended_question_count) {
+                          setQuestionCount(cl.recommended_question_count);
+                        }
+                      }}
+                      className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-[#4682B4]"
+                    >
+                      {clusters.map((cl) => (
+                        <option key={cl.id} value={cl.id}>
+                          Cluster {cl.cluster_number} — {cl.title}
+                        </option>
+                      ))}
+                      <option value="new">+ Create New Cluster...</option>
+                    </select>
+                  </div>
 
-                      {/* Inline New Cluster Inputs if 'new' is chosen */}
-                      {targetClusterId === 'new' && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-200">
-                          <div>
-                            <label className="text-[11px] font-semibold text-slate-600 block mb-1">New Cluster Number</label>
-                            <input
-                              type="text"
-                              value={newClusterNumber}
-                              onChange={(e) => setNewClusterNumber(e.target.value)}
-                              placeholder="e.g. 2.5"
-                              className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-[#4682B4]"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[11px] font-semibold text-slate-600 block mb-1">New Cluster Title</label>
-                            <input
-                              type="text"
-                              value={newClusterTitle}
-                              onChange={(e) => setNewClusterTitle(e.target.value)}
-                              placeholder="e.g. Receiving & Dispatch Operations"
-                              className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-[#4682B4]"
-                              required
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Set Type & Client Name */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Right: Client Association / Assessment Scope / BrainCert Objective ID (5 cols) */}
+                  <div className="sm:col-span-5">
+                    {isBrainCertBankSet ? (
                       <div>
-                        <label className="text-xs font-semibold text-slate-700 mb-1 block">Question Set Type</label>
-                        <div className="flex flex-wrap items-center gap-3 pt-1">
-                          <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
-                            <input
-                              type="radio"
-                              checked={!isCustomSet && !isFsaMockSet && !isBrainCertBankSet}
-                              onChange={() => {
-                                setIsCustomSet(false);
-                                setIsFsaMockSet(false);
-                                setIsBrainCertBankSet(false);
-                                setClientName('Generic Standard');
-                                setSetTitle('Generic Standard Assessment');
-                              }}
-                              className="text-[#4682B4]"
-                            />
-                            <span>Generic Standard</span>
-                          </label>
-                          <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
-                            <input
-                              type="radio"
-                              checked={isCustomSet}
-                              onChange={() => {
-                                setIsCustomSet(true);
-                                setIsFsaMockSet(false);
-                                setIsBrainCertBankSet(false);
-                                if (clientName === 'Generic Standard' || clientName.includes('IACs Only') || clientName.includes('BrainCert')) {
-                                  setClientName('Spur Corporation');
-                                }
-                                setSetTitle('');
-                              }}
-                              className="text-[#4682B4]"
-                            />
-                            <span>Custom Workplace</span>
-                          </label>
-                          <label className="flex items-center gap-1.5 text-xs font-semibold text-emerald-800 cursor-pointer">
-                            <input
-                              type="radio"
-                              checked={isFsaMockSet}
-                              onChange={() => {
-                                setIsCustomSet(false);
-                                setIsFsaMockSet(true);
-                                setIsBrainCertBankSet(false);
-                                setClientName(`Cluster ${modalClusterNum} IACs Only`);
-                                setSetTitle(`Cluster ${modalClusterNum} — Generic IAC FSA Mock Exam`);
-                              }}
-                              className="text-emerald-600"
-                            />
-                            <span className="flex items-center gap-1">
-                              <span>Generic IAC FSA Mock</span>
-                              <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-300 font-bold">Exam</span>
-                            </span>
-                          </label>
-                          <label className="flex items-center gap-1.5 text-xs font-semibold text-[#1e3a5f] cursor-pointer">
-                            <input
-                              type="radio"
-                              checked={isBrainCertBankSet}
-                              onChange={() => {
-                                setIsCustomSet(false);
-                                setIsFsaMockSet(false);
-                                setIsBrainCertBankSet(true);
-                                setQuestionCount(60);
-                                setTimingMode('overall');
-                                setOverallTimeMinutes(40);
-                                setClientName(`BrainCert EISA Pool • Cluster ${modalClusterNum}`);
-                                setSetTitle(`Cluster ${modalClusterNum} — BrainCert EISA Question Bank (60 Qs)`);
-                              }}
-                              className="text-[#4682B4]"
-                            />
-                            <span className="flex items-center gap-1">
-                              <span>BrainCert EISA Bank</span>
-                              <span className="text-[9px] bg-sky-100 text-[#1e3a5f] px-1.5 py-0.5 rounded border border-[#4682B4]/40 font-bold">60 Qs Pool</span>
-                            </span>
-                          </label>
-                        </div>
-                      </div>
-
-                      <div>
-                        {isBrainCertBankSet ? (
-                          <div>
-                            <label className="text-xs font-semibold text-[#1e3a5f] mb-1 flex items-center justify-between">
-                              <span>BrainCert Objective ID</span>
-                              <span className="text-[10px] font-normal text-slate-500">Can also be updated after creation</span>
-                            </label>
-                            <input
-                              type="text"
-                              value={brainCertObjectiveId}
-                              onChange={(e) => setBrainCertObjectiveId(e.target.value)}
-                              placeholder="e.g. 3927820"
-                              className="w-full px-3 py-2 text-xs font-mono font-bold border border-[#4682B4]/50 bg-sky-50/40 text-[#1e3a5f] rounded-lg focus:outline-none focus:border-[#4682B4]"
-                            />
-                            <p className="text-[11px] text-[#1e3a5f] mt-1 font-medium flex items-center gap-1">
-                              <span>✓</span>
-                              <span>Generates 60 multi-format questions (Types 1, 2, 4 & 5) in 1 click.</span>
-                            </p>
-                          </div>
-                        ) : (
-                          <div>
-                            <label className="text-xs font-semibold text-slate-700 mb-1 block">
-                              {isFsaMockSet ? 'Assessment Scope' : isCustomSet ? 'Client / Company Name' : 'Client Association'}
-                            </label>
-                            <input
-                              type="text"
-                              value={isFsaMockSet ? `Cluster ${modalClusterNum} IACs Only` : clientName}
-                              onChange={(e) => setClientName(e.target.value)}
-                              placeholder="e.g. Spur Corporation"
-                              disabled={!isCustomSet}
-                              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#4682B4] disabled:bg-emerald-50/40 disabled:text-emerald-900 font-semibold"
-                            />
-                            {isFsaMockSet && (
-                              <p className="text-[11px] text-emerald-700 mt-1 font-medium flex items-center gap-1">
-                                <span>✓</span>
-                                <span>Targeting only Cluster {modalClusterNum} Integrated Assessment Criteria (IACs).</span>
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Custom Context Box (Directly above prompt when isCustomSet is active) */}
-                    {isCustomSet && (
-                      <div className="p-3 bg-[#F1F9F3] border border-[#6DC082]/30 rounded-xl space-y-1">
-                        <label className="text-xs font-bold text-[#2e7d32] flex items-center justify-between">
-                          <span>Custom Operational Environment Context:</span>
-                          <span className="text-[10px] font-normal text-slate-500">Included dynamically in prompt</span>
+                        <label className="text-xs font-bold text-[#1e3a5f] mb-1 flex items-center justify-between">
+                          <span>BrainCert Objective ID</span>
+                          <span className="text-[10px] font-normal text-slate-500">Editable later</span>
                         </label>
-                        <textarea
-                          value={customContext}
-                          onChange={(e) => setCustomContext(e.target.value)}
-                          rows={2}
-                          placeholder="e.g. Spur Corporation employees working in a distribution warehouse in Montague Gardens dealing with cold storage, oil spills, and pallet heights..."
-                          className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-[#4682B4]"
+                        <input
+                          type="text"
+                          value={brainCertObjectiveId}
+                          onChange={(e) => setBrainCertObjectiveId(e.target.value)}
+                          placeholder="e.g. 3927820"
+                          className="w-full px-3 py-2 text-xs font-mono font-bold border border-[#4682B4]/50 bg-sky-50/60 text-[#1e3a5f] rounded-lg focus:outline-none focus:border-[#4682B4]"
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 mb-1 block">
+                          {isFsaMockSet ? 'Assessment Scope' : isCustomSet ? 'Client / Company Name' : 'Client Association'}
+                        </label>
+                        <input
+                          type="text"
+                          value={isFsaMockSet ? `Cluster ${modalClusterNum} IACs Only` : clientName}
+                          onChange={(e) => setClientName(e.target.value)}
+                          placeholder="e.g. Spur Corporation"
+                          disabled={!isCustomSet}
+                          className="w-full px-3 py-2 text-xs border border-slate-300 bg-white rounded-lg focus:outline-none focus:border-[#4682B4] disabled:bg-slate-100 disabled:text-slate-600 font-semibold"
                         />
                       </div>
                     )}
+                  </div>
+                </div>
 
-                    {/* Step 2: Copy Notebook Prompt Banner */}
-                    <div className="p-3 bg-[#4682B4]/10 border border-[#4682B4]/30 rounded-xl flex items-center justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h4 className="text-xs font-bold text-[#1e3a5f] flex items-center gap-1.5">
-                            <Sparkles className="w-4 h-4 text-[#4682B4]" />
-                            Copy Gemini Notebook Prompt (Learner Guide + EISA Specs)
-                          </h4>
-                          {/* Dynamic Target Indicator */}
-                          <span className="px-2 py-0.5 rounded text-[10.5px] font-semibold bg-[#4682B4]/20 text-[#1e3a5f] border border-[#4682B4]/30">
-                            🎯 Targets:{' '}
-                            {targetClusterId === 'new'
-                              ? (newClusterNumber
-                                ? `Cluster ${newClusterNumber}${newClusterTitle ? ` (${newClusterTitle})` : ''}`
-                                : '⚠️ Fill Cluster # above')
-                              : `Cluster ${modalClusterNum}`}
-                            {isBrainCertBankSet
-                              ? ` • BrainCert 60-Q Multi-Format Pool`
-                              : isFsaMockSet
-                                ? ` • Cluster ${modalClusterNum} IACs Only`
-                                : (isCustomSet && clientName && clientName !== 'Generic Standard' ? ` • ${clientName}` : ' • Generic Standard')}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-600">
-                          {targetClusterId === 'new' && !newClusterNumber ? (
-                            <span className="text-amber-700 font-medium">
-                              Fill in New Cluster Number & Title above first so the prompt targets your exact topic!
-                            </span>
-                          ) : (
-                            'Select your Learner Guide & EISA doc in NotebookLM, paste this prompt, and copy the extract back here.'
-                          )}
-                        </p>
+                {/* Inline New Cluster Inputs if 'new' is chosen */}
+                {targetClusterId === 'new' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-200">
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">New Cluster Number</label>
+                      <input
+                        type="text"
+                        value={newClusterNumber}
+                        onChange={(e) => setNewClusterNumber(e.target.value)}
+                        placeholder="e.g. 2.5"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-[#4682B4]"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">New Cluster Title</label>
+                      <input
+                        type="text"
+                        value={newClusterTitle}
+                        onChange={(e) => setNewClusterTitle(e.target.value)}
+                        placeholder="e.g. Receiving & Dispatch Operations"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-[#4682B4]"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Row 2: Question Set Type (Full width, 2-row grid with automatic recommended defaults) */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-700">2. Question Set Type</label>
+                  <span className="text-[10.5px] text-slate-500">
+                    Auto-selects recommended count, mode &amp; timer below
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {/* Option 1: Generic Standard */}
+                  <label
+                    className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                      !isCustomSet && !isFsaMockSet && !isBrainCertBankSet
+                        ? 'bg-[#4682B4]/10 border-[#4682B4] text-slate-900 font-bold shadow-2xs'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        checked={!isCustomSet && !isFsaMockSet && !isBrainCertBankSet}
+                        onChange={() => {
+                          const activeCl = clusters.find(c => c.id === targetClusterId) || selectedCluster;
+                          setIsCustomSet(false);
+                          setIsFsaMockSet(false);
+                          setIsBrainCertBankSet(false);
+                          setQuestionCount(activeCl?.recommended_question_count || 10);
+                          setTargetLevel('operational');
+                          setDefaultEntryMode('group');
+                          setTimingMode('overall');
+                          setOverallTimeMinutes(20);
+                          setClientName('Generic Standard');
+                          setSetTitle('Generic Standard Assessment');
+                        }}
+                        className="text-[#4682B4]"
+                      />
+                      <span>Generic Standard</span>
+                    </div>
+                    <span className="text-[10px] font-semibold text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                      Group • 20m
+                    </span>
+                  </label>
+
+                  {/* Option 2: Custom Workplace */}
+                  <label
+                    className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                      isCustomSet
+                        ? 'bg-amber-50/80 border-amber-400 text-slate-900 font-bold shadow-2xs'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        checked={isCustomSet}
+                        onChange={() => {
+                          const activeCl = clusters.find(c => c.id === targetClusterId) || selectedCluster;
+                          setIsCustomSet(true);
+                          setIsFsaMockSet(false);
+                          setIsBrainCertBankSet(false);
+                          setQuestionCount(activeCl?.recommended_question_count || 10);
+                          setTargetLevel('operational');
+                          setDefaultEntryMode('group');
+                          setTimingMode('overall');
+                          setOverallTimeMinutes(20);
+                          if (clientName === 'Generic Standard' || clientName.includes('IACs Only') || clientName.includes('BrainCert')) {
+                            setClientName('Spur Corporation');
+                          }
+                          setSetTitle('');
+                        }}
+                        className="text-[#4682B4]"
+                      />
+                      <span>Custom Workplace</span>
+                    </div>
+                    <span className="text-[10px] font-semibold text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded border border-amber-300">
+                      Client DC • 20m
+                    </span>
+                  </label>
+
+                  {/* Option 3: Generic IAC FSA Mock */}
+                  <label
+                    className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                      isFsaMockSet
+                        ? 'bg-emerald-50/80 border-emerald-500 text-emerald-950 font-bold shadow-2xs'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        checked={isFsaMockSet}
+                        onChange={() => {
+                          const activeCl = clusters.find(c => c.id === targetClusterId) || selectedCluster;
+                          setIsCustomSet(false);
+                          setIsFsaMockSet(true);
+                          setIsBrainCertBankSet(false);
+                          setQuestionCount(activeCl?.recommended_question_count ? Math.max(12, activeCl.recommended_question_count) : 15);
+                          setTargetLevel('operational');
+                          setDefaultEntryMode('individual');
+                          setTimingMode('overall');
+                          setOverallTimeMinutes(30);
+                          setClientName(`Cluster ${modalClusterNum} IACs Only`);
+                          setSetTitle(`Cluster ${modalClusterNum} — Generic IAC FSA Mock Exam`);
+                        }}
+                        className="text-emerald-600"
+                      />
+                      <span>Generic IAC FSA Mock</span>
+                    </div>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-300 font-bold">
+                      Exam • 15 Qs • 30m
+                    </span>
+                  </label>
+
+                  {/* Option 4: BrainCert EISA Bank */}
+                  <label
+                    className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                      isBrainCertBankSet
+                        ? 'bg-sky-50 border-[#4682B4] text-[#1e3a5f] font-bold shadow-2xs'
+                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        checked={isBrainCertBankSet}
+                        onChange={() => {
+                          setIsCustomSet(false);
+                          setIsFsaMockSet(false);
+                          setIsBrainCertBankSet(true);
+                          setQuestionCount(60);
+                          setTargetLevel('operational');
+                          setDefaultEntryMode('individual');
+                          setTimingMode('overall');
+                          setOverallTimeMinutes(40);
+                          setClientName(`BrainCert EISA Pool • Cluster ${modalClusterNum}`);
+                          setSetTitle(`Cluster ${modalClusterNum} — BrainCert EISA Question Bank (60 Qs)`);
+                        }}
+                        className="text-[#4682B4]"
+                      />
+                      <span>BrainCert EISA Bank</span>
+                    </div>
+                    <span className="text-[10px] bg-sky-100 text-[#1e3a5f] px-1.5 py-0.5 rounded border border-[#4682B4]/40 font-bold">
+                      60 Qs Pool • 40m
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Custom Context Box (Directly above prompt when isCustomSet is active) */}
+              {isCustomSet && (
+                <div className="p-3 bg-[#F1F9F3] border border-[#6DC082]/30 rounded-xl space-y-1">
+                  <label className="text-xs font-bold text-[#2e7d32] flex items-center justify-between">
+                    <span>Custom Operational Environment Context:</span>
+                    <span className="text-[10px] font-normal text-slate-500">Included dynamically in prompt</span>
+                  </label>
+                  <textarea
+                    value={customContext}
+                    onChange={(e) => setCustomContext(e.target.value)}
+                    rows={2}
+                    placeholder="e.g. Spur Corporation employees working in a distribution warehouse in Montague Gardens dealing with cold storage, oil spills, and pallet heights..."
+                    className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-[#4682B4]"
+                  />
+                </div>
+              )}
+
+              {/* Step 3: Progressive Disclosure Notebook Prompt & Extract */}
+              {!notebookExtract.trim() ? (
+                /* STATE A: Extract is empty -> Show guided Copy Prompt banner + Paste box */
+                <div className="space-y-2.5">
+                  <div className="p-3 bg-[#4682B4]/10 border border-[#4682B4]/30 rounded-xl flex items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="text-xs font-bold text-[#1e3a5f] flex items-center gap-1.5">
+                          <Sparkles className="w-4 h-4 text-[#4682B4]" />
+                          Copy Gemini Notebook Prompt (Learner Guide + EISA Specs)
+                        </h4>
+                        <span className="px-2 py-0.5 rounded text-[10.5px] font-semibold bg-[#4682B4]/20 text-[#1e3a5f] border border-[#4682B4]/30">
+                          🎯 Targets:{' '}
+                          {targetClusterId === 'new'
+                            ? (newClusterNumber
+                              ? `Cluster ${newClusterNumber}${newClusterTitle ? ` (${newClusterTitle})` : ''}`
+                              : '⚠️ Fill Cluster # above')
+                            : `Cluster ${modalClusterNum}`}
+                          {isBrainCertBankSet
+                            ? ` • BrainCert 60-Q Multi-Format Pool`
+                            : isFsaMockSet
+                              ? ` • Cluster ${modalClusterNum} IACs Only`
+                              : (isCustomSet && clientName && clientName !== 'Generic Standard' ? ` • ${clientName}` : ' • Generic Standard')}
+                        </span>
                       </div>
+                      <p className="text-[11px] text-slate-600">
+                        {targetClusterId === 'new' && !newClusterNumber ? (
+                          <span className="text-amber-700 font-medium">
+                            Fill in New Cluster Number &amp; Title above first so the prompt targets your exact topic!
+                          </span>
+                        ) : (
+                          'Select your Learner Guide & EISA doc in NotebookLM, paste this prompt, and copy the extract back below.'
+                        )}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyNotebookPrompt}
+                      className="px-3.5 py-1.5 bg-[#4682B4] hover:bg-[#3b6f9a] text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 transition-colors shrink-0"
+                    >
+                      {promptCopied ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy Prompt</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                      Paste Gemini Notebook Extract (Learner Guide SOPs &amp; EISA Assessment Criteria)
+                    </label>
+                    <textarea
+                      value={notebookExtract}
+                      onChange={(e) => setNotebookExtract(e.target.value)}
+                      rows={3}
+                      placeholder="Paste the generated response from your Gemini Notebook here..."
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#4682B4] font-mono"
+                    />
+                  </div>
+                </div>
+              ) : (
+                /* STATE B: Extract is already pasted -> Collapse big blue banner into a sleek inline action bar! */
+                <div className="p-3 bg-emerald-50/40 border border-emerald-200 rounded-xl space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>NotebookLM Extract Ready</span>
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        {notebookExtract.trim().split(/\s+/).length} words loaded
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                        🎯 {targetClusterId === 'new' ? `Cluster ${newClusterNumber || 'New'}` : `Cluster ${modalClusterNum}`}
+                        {isBrainCertBankSet ? ' • BrainCert 60-Q' : isFsaMockSet ? ' • FSA Mock' : isCustomSet ? ` • ${clientName}` : ' • Generic'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={handleCopyNotebookPrompt}
-                        className="px-3.5 py-1.5 bg-[#4682B4] hover:bg-[#3b6f9a] text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 transition-colors shrink-0"
+                        className="px-2.5 py-1 bg-[#4682B4] hover:bg-[#3b6f9a] text-white text-[11px] font-bold rounded-md flex items-center gap-1 transition-colors"
+                        title="Copy a fresh prompt tailored to your current Cluster & Question Set Type selection"
                       >
-                  {promptCopied ? (
-                    <>
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy Prompt</span>
-                    </>
-                  )}
-                </button>
-              </div>
+                        {promptCopied ? (
+                          <>
+                            <Check className="w-3 h-3" />
+                            <span>Prompt Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3 h-3" />
+                            <span>Recreate / Copy Prompt</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNotebookExtract('');
+                          handleCopyNotebookPrompt();
+                        }}
+                        className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 text-[11px] font-semibold rounded-md transition-colors"
+                        title="Clear current extract and copy new prompt to clipboard"
+                      >
+                        Clear &amp; New
+                      </button>
+                    </div>
+                  </div>
 
-              {/* Paste from Gemini Notebook */}
-              <div>
-                <label className="text-xs font-semibold text-slate-700 mb-1 block">
-                  Paste Gemini Notebook Extract (Learner Guide SOPs & EISA Assessment Criteria)
-                </label>
-                <textarea
-                  value={notebookExtract}
-                  onChange={(e) => setNotebookExtract(e.target.value)}
-                  rows={4}
-                  placeholder="Paste the generated response from your Gemini Notebook here..."
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#4682B4] font-mono"
-                />
-              </div>
+                  <textarea
+                    value={notebookExtract}
+                    onChange={(e) => setNotebookExtract(e.target.value)}
+                    rows={2}
+                    placeholder="Paste the generated response from your Gemini Notebook here..."
+                    className="w-full px-2.5 py-1.5 text-[11px] bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-[#4682B4] font-mono text-slate-700"
+                  />
+                </div>
+              )}
 
               {/* Parameters Row */}
               <div className="grid grid-cols-3 gap-3">
