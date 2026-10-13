@@ -129,6 +129,7 @@ export default function CoursesPage() {
   const [clientName, setClientName] = useState('Generic Standard');
   const [setTitle, setSetTitle] = useState('');
   const [notebookExtract, setNotebookExtract] = useState('');
+  const [showNotebookFields, setShowNotebookFields] = useState(false);
   const [customContext, setCustomContext] = useState('');
   const [questionCount, setQuestionCount] = useState(8);
   const [targetLevel, setTargetLevel] = useState<CognitiveTargetLevel>('operational');
@@ -386,19 +387,21 @@ Note: Do NOT include page numbers in the text; focus on actionable concepts, met
   const handleOpenGenerator = (clusterOverride?: CourseCluster | React.MouseEvent) => {
     setGenError(null);
     const target = (clusterOverride && 'id' in clusterOverride) ? (clusterOverride as CourseCluster) : selectedCluster;
+    let hasExtract = Boolean(notebookExtract.trim());
     if (target) {
       setTargetClusterId(target.id);
       setQuestionCount(target.recommended_question_count || 10);
-      // Auto-load saved Notebook Extract from any existing set in this cluster if current extract is empty
       const existingClusterSets = AppStore.getQuestionSets(target.id);
       const savedExtract = existingClusterSets.find(s => s.raw_notebook_extract && s.raw_notebook_extract.trim().length > 0)?.raw_notebook_extract;
       if (savedExtract && !notebookExtract.trim()) {
         setNotebookExtract(savedExtract);
+        hasExtract = true;
       }
     } else {
       setTargetClusterId('new');
       setQuestionCount(10);
     }
+    setShowNotebookFields(!hasExtract);
     setIsFsaMockSet(false);
     setIsCustomSet(false);
     setIsBrainCertBankSet(false);
@@ -1247,32 +1250,6 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
               <Plus className="w-3.5 h-3.5" />
               <span>New Course</span>
             </button>
-
-            {selectedCourse && (
-              <button
-                type="button"
-                onClick={async () => {
-                  if (confirm(`Are you sure you want to permanently delete course "${selectedCourse.code} — ${selectedCourse.title}"?\n\nWARNING: This will permanently delete all associated clusters, question banks, and uploaded documents from the cloud database.`)) {
-                    await AppStore.deleteCourse(selectedCourse.id);
-                    const updated = await AppStore.fetchCourses();
-                    setCourses(updated);
-                    if (updated.length > 0) {
-                      setSelectedCourse(updated[0]);
-                      loadClusters(updated[0].id);
-                    } else {
-                      setSelectedCourse(null);
-                      setClusters([]);
-                      setQuestionSets([]);
-                    }
-                  }
-                }}
-                title={`Delete Course: ${selectedCourse.code}`}
-                className="px-2.5 py-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-xs font-semibold rounded-xl border border-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Delete Course</span>
-              </button>
-            )}
           </div>
         </div>
 
@@ -1735,11 +1712,11 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
               /* Standard Question Set Editor */
               <div className="bg-white border border-[#D5E3EF] rounded-2xl p-5 shadow-xs space-y-4">
                 {/* Header: Cluster Question Bank + Set Name on the SAME line */}
-                <div className="pb-3 border-b border-slate-100 space-y-2.5">
+                <div className="pb-3 border-b border-slate-100">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <h3 className="text-base font-bold text-slate-800 flex items-center gap-2.5 flex-wrap">
                       <span className="text-[#4682B4]">
-                        Cluster {selectedCluster?.cluster_number || '2.4'} Question Bank
+                        Cluster {selectedCluster?.cluster_number || '2.4'}
                       </span>
                       <span className="text-slate-300 font-normal">|</span>
                       <span className="text-slate-800">
@@ -1761,7 +1738,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                         title="Open BrainCert LMS EISA Assessment Setup, Mobile HTML Instructions & Multi-Format CSV Export"
                       >
                         <FileSpreadsheet className="w-3.5 h-3.5 text-[#6DC082]" />
-                        <span>BrainCert EISA Export</span>
+                        <span>BrainCert Export</span>
                       </button>
 
                       {/* Print / Export Formal Cluster FSA Paper */}
@@ -1772,7 +1749,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                         title="Print or export official Cluster FSA assessment instrument & memorandum"
                       >
                         <Printer className="w-3.5 h-3.5" />
-                        <span>Print / Export FSA Paper</span>
+                        <span>Print / FSA Paper</span>
                       </button>
 
                       {/* Quick Button to Add Another Question Set to this cluster! */}
@@ -1780,67 +1757,37 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                         type="button"
                         onClick={() => handleOpenGenerator()}
                         className="px-3 py-1 bg-slate-100 hover:bg-[#4682B4] hover:text-white text-slate-700 text-xs font-bold rounded-lg border border-slate-200 transition-colors flex items-center gap-1.5 shrink-0"
-                        title="Add another question set (Generic, Custom Workplace, FSA Mock, or BrainCert Bank) for this cluster"
+                        title="Add another question set for this cluster"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>+ New Set on Cluster {selectedCluster?.cluster_number}</span>
+                        <span>+ New Set</span>
                       </button>
                     </div>
                   </div>
-
-                  {/* Facilitator-Only QCTO EISA & IAC Badge Bar */}
-                  {selectedCluster && (selectedCluster.eisa_focus_area || selectedCluster.mapped_iacs) && (
-                    <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                      {selectedCluster.eisa_focus_area && (
-                        <span className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-900 border border-amber-200/80 flex items-center gap-1">
-                          <span className="text-amber-700">🎯 Facilitator View:</span>
-                          <span>{selectedCluster.eisa_focus_area}</span>
-                        </span>
-                      )}
-                      {selectedCluster.weighting_percentage && (
-                        <span className="px-2 py-1 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1">
-                          <span className="text-emerald-700">⚖️ Weighting:</span>
-                          <span className="font-bold">{selectedCluster.weighting_percentage}%</span>
-                          <span className="text-emerald-600 font-normal">• Rec: {selectedCluster.recommended_question_count || 6} Qs</span>
-                        </span>
-                      )}
-                      {selectedCluster.mapped_iacs && (
-                        <span className="px-2 py-1 rounded-md text-[10.5px] font-mono font-medium bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1 truncate max-w-xl" title={selectedCluster.mapped_iacs}>
-                          <span className="text-slate-500">📋 IACs:</span>
-                          <span className="truncate">{selectedCluster.mapped_iacs}</span>
-                        </span>
-                      )}
-                    </div>
-                  )}
                 </div>
 
                 {/* BrainCert Facilitator Bar (Collaborative 3-Step Workflow) */}
                 {selectedSet.is_braincert_bank && (
-                  <div className="p-3.5 bg-gradient-to-r from-[#1e3a5f] to-[#2c5282] text-white rounded-xl border border-[#4682B4]/40 shadow-xs space-y-2.5">
+                  <div className="p-3 bg-gradient-to-r from-[#1e3a5f] to-[#2c5282] text-white rounded-xl border border-[#4682B4]/40 shadow-xs space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider bg-[#6DC082] text-slate-900">
-                          BrainCert EISA Bank
-                        </span>
-                        <span className="text-xs font-bold text-white">
-                          60-Question Rotation Pool (20 Drawn / 40 Mins • 70% Pass • Partial Credit)
-                        </span>
-                      </div>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider bg-[#6DC082] text-slate-900">
+                        BrainCert EISA Bank
+                      </span>
                       <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                         selectedSet.questions.length >= 60
                           ? 'bg-emerald-400/20 text-emerald-200 border border-emerald-400/40'
                           : 'bg-amber-400/20 text-amber-200 border border-amber-400/40'
                       }`}>
-                        Pool Size: {selectedSet.questions.length} / 60 Qs
+                        {selectedSet.questions.length} / 60 Qs
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                       {/* Step 1: Container & Mobile HTML */}
-                      <div className="bg-white/10 rounded-lg p-2.5 border border-white/15 flex items-center justify-between gap-2">
+                      <div className="bg-white/10 rounded-lg p-2 border border-white/15 flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-sky-200">Step 1 • BrainCert Setup</div>
-                          <div className="text-xs font-semibold text-white truncate">Container & Mobile HTML</div>
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-sky-200">Step 1</div>
+                          <div className="text-xs font-semibold text-white truncate">Setup & HTML</div>
                         </div>
                         <button
                           type="button"
@@ -1848,14 +1795,14 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                             setBrainCertTab('setup');
                             setShowBrainCertModal(true);
                           }}
-                          className="px-2.5 py-1.5 bg-white text-[#1e3a5f] hover:bg-sky-50 text-[11px] font-bold rounded-md shrink-0 transition-colors"
+                          className="px-2.5 py-1 bg-white text-[#1e3a5f] hover:bg-sky-50 text-[11px] font-bold rounded-md shrink-0 transition-colors"
                         >
-                          1. Setup & HTML
+                          Open Guide
                         </button>
                       </div>
 
                       {/* Step 2: Objective ID Link */}
-                      <div className="bg-white/10 rounded-lg p-2.5 border border-white/15 flex items-center justify-between gap-2">
+                      <div className="bg-white/10 rounded-lg p-2 border border-white/15 flex items-center justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <label className="text-[10px] font-bold uppercase tracking-wider text-sky-200 block">
                             Step 2 • Objective ID
@@ -1871,52 +1818,27 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                               AppStore.saveQuestionSet(updated);
                             }}
                             placeholder="e.g. 3927820"
-                            className="mt-0.5 w-full px-2 py-1 text-xs font-mono font-bold bg-slate-900/50 text-white border border-white/25 rounded focus:outline-none focus:border-[#6DC082]"
+                            className="mt-0.5 w-full px-2 py-0.5 text-xs font-mono font-bold bg-slate-900/50 text-white border border-white/25 rounded focus:outline-none focus:border-[#6DC082]"
                           />
                         </div>
                       </div>
 
                       {/* Step 3: Multi-Format CSV Export */}
-                      <div className="bg-white/10 rounded-lg p-2.5 border border-white/15 flex items-center justify-between gap-2">
+                      <div className="bg-white/10 rounded-lg p-2 border border-white/15 flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-sky-200">Step 3 • Upload Bank</div>
-                          <div className="text-xs font-semibold text-white truncate">Types 1, 2, 4 & 5 CSV</div>
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-sky-200">Step 3</div>
+                          <div className="text-xs font-semibold text-white truncate">Question Bank CSV</div>
                         </div>
                         <button
                           type="button"
                           onClick={() => handleExportBrainCertCsv()}
-                          className="px-2.5 py-1.5 bg-[#6DC082] hover:bg-[#5bb070] text-slate-950 text-[11px] font-extrabold rounded-md shrink-0 flex items-center gap-1 transition-colors shadow-xs"
+                          className="px-2.5 py-1 bg-[#6DC082] hover:bg-[#5bb070] text-slate-950 text-[11px] font-extrabold rounded-md shrink-0 flex items-center gap-1 transition-colors shadow-xs"
                         >
                           <Download className="w-3.5 h-3.5" />
                           <span>Export CSV</span>
                         </button>
                       </div>
                     </div>
-                  </div>
-                )}
-
-                {/* Persistent Source Reference & Notebook Prompt Copy */}
-                {(selectedSet.custom_background_context || selectedSet.raw_notebook_extract) && (
-                  <div className="p-3 bg-[#F1F9F3] border border-[#6DC082]/30 rounded-xl text-xs space-y-1">
-                    <div className="flex items-center justify-between">
-                      <div className="font-bold text-[#2e7d32] flex items-center gap-1">
-                        <Tag className="w-3.5 h-3.5" />
-                        <span>Persistent Source Reference:</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleCopyNotebookPrompt}
-                        className="text-[11px] font-semibold text-[#4682B4] hover:underline flex items-center gap-1"
-                      >
-                        <Copy className="w-3 h-3" />
-                        <span>Copy Notebook Prompt</span>
-                      </button>
-                    </div>
-                    {selectedSet.custom_background_context && (
-                      <p className="text-slate-700 italic">
-                        &quot;{selectedSet.custom_background_context}&quot;
-                      </p>
-                    )}
                   </div>
                 )}
 
@@ -2183,8 +2105,8 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
 
                         {/* Debrief & Workplace Rationale */}
                         <div className="bg-[#D5E3EF]/30 p-2.5 rounded-lg border border-[#D5E3EF]">
-                          <label className="text-[10px] font-bold text-slate-700 block mb-1 uppercase tracking-wider flex items-center gap-1.5">
-                            <span>🟢 Model Answer & 📝 How the Assessor Marks This:</span>
+                          <label className="text-[10px] font-bold text-slate-700 block mb-1 uppercase tracking-wider">
+                            Model Answer &amp; Marking Guide
                           </label>
                           <textarea
                             value={q.additional_text || ''}
@@ -2217,14 +2139,17 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white border border-[#D5E3EF] rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden p-6 space-y-4 my-8">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div>
-                <span className="text-xs font-bold text-[#4682B4] uppercase tracking-wider">
-                  Occupational Course Setup
-                </span>
-                <h3 className="text-lg font-bold text-slate-800">
-                  Add New Course Container
-                </h3>
-              </div>
+              <h3 className="text-lg font-bold text-slate-800">
+                Add New Course
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowCourseModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                title="Close modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
             <form onSubmit={handleCreateCourse} className="space-y-4">
@@ -2255,7 +2180,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 mb-1 block">Course Description & Occupational Scope</label>
+                <label className="text-xs font-semibold text-slate-700 mb-1 block">Course Description</label>
                 <textarea
                   value={courseDesc}
                   onChange={(e) => setCourseDesc(e.target.value)}
@@ -2266,7 +2191,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
               </div>
 
               {/* QCTO Accreditation Checkbox Toggle */}
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
                 <label className="flex items-center gap-2.5 cursor-pointer">
                   <input
                     type="checkbox"
@@ -2276,12 +2201,9 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                   />
                   <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4 text-[#4682B4]" />
-                    Accredited QCTO Occupational Course (Requires EISA / FSA Alignment)
+                    Accredited QCTO Occupational Course (EISA / FSA Alignment)
                   </span>
                 </label>
-                <p className="text-[11px] text-slate-500 pl-6 leading-relaxed">
-                  Enables auto-generating all canonical clusters in one shot, mapping EISA focus areas, tracking curriculum weighting %, and scaling recommended question counts automatically.
-                </p>
               </div>
 
               {/* Step 2: QCTO Master Cluster-to-IAC Mapping (When QCTO course is checked) */}
@@ -2290,23 +2212,12 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                   <div className="flex items-center justify-between gap-2">
                     <h4 className="text-xs font-bold text-[#2e7d32] flex items-center gap-1.5">
                       <Sparkles className="w-4 h-4 text-[#6DC082]" />
-                      Step 2: QCTO Master Cluster-to-IAC Mapping (One-Shot Cluster Generation)
+                      QCTO Master Cluster-to-IAC Mapping
                     </h4>
-                  </div>
-                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                    Copy the prompt below into your NotebookLM (with your Curriculum Framework & EISA Specification selected), then paste the returned Master Mapping Table below to auto-create all clusters in one shot.
-                  </p>
-
-                  {/* Copy Prompt Button Banner */}
-                  <div className="flex items-center justify-between p-2.5 bg-white border border-[#6DC082]/30 rounded-lg gap-2">
-                    <div className="text-[11px] text-slate-600 truncate">
-                      <span className="font-semibold text-slate-700">NotebookLM Master Prompt:</span>{' '}
-                      Generates 5-column Markdown table mapping clusters, EISA focus, IACs, and weightings.
-                    </div>
                     <button
                       type="button"
                       onClick={handleCopyMasterPrompt}
-                      className="px-3 py-1.5 bg-[#4682B4] hover:bg-[#3b6f9a] text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 transition-colors shrink-0"
+                      className="px-3 py-1 bg-[#4682B4] hover:bg-[#3b6f9a] text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 transition-colors shrink-0"
                     >
                       {masterPromptCopied ? (
                         <>
@@ -2324,14 +2235,11 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
 
                   {/* Paste Table Textarea */}
                   <div>
-                    <label className="text-xs font-semibold text-slate-700 mb-1 block">
-                      Paste NotebookLM Master Mapping Table (Markdown Table):
-                    </label>
                     <textarea
                       value={masterIacTable}
                       onChange={(e) => setMasterIacTable(e.target.value)}
-                      rows={5}
-                      placeholder={`| Cluster Number | Cluster Title | Primary EISA Focus Area | Mapped IAC / AAC Assessment Criteria | Weighting & Assessment Focus |\n| **Cluster 1.1** | **The Receiving and Dispatch Environment** | Enabling Foundational Knowledge | ... | 100% of KM-01 (4 Credits) |\n| **Cluster 1.2** | **Prevent Shrinkage and Losses** | Focus Area 1 (50%) & Focus Area 2 (50%) | ... | 60% of KM-02 & 100% of PM-03 |`}
+                      rows={4}
+                      placeholder="Copy the Master Prompt into NotebookLM, then paste the returned Markdown table here to auto-create all clusters..."
                       className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#4682B4] font-mono leading-relaxed bg-white"
                     />
                   </div>
@@ -2342,10 +2250,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                       <div className="flex items-center justify-between text-xs font-bold text-[#2e7d32]">
                         <span className="flex items-center gap-1">
                           <CheckCircle2 className="w-4 h-4 text-[#6DC082]" />
-                          ✓ {detectedClusters.length} Clusters Detected & Ready to Auto-Create!
-                        </span>
-                        <span className="text-[10px] font-normal text-slate-500">
-                          (Group scaling: 15 for 50% EISA focus, 10 for operational, 8 min for foundational)
+                          ✓ {detectedClusters.length} Clusters Ready to Auto-Create
                         </span>
                       </div>
 
@@ -2355,32 +2260,23 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                             <div className="min-w-0">
                               <span className="font-bold text-[#1e3a5f]">Cluster {cl.cluster_number}:</span>{' '}
                               <span className="font-semibold text-slate-700">{cl.title}</span>
-                              {cl.eisa_focus_area && (
-                                <span className="text-slate-500 block text-[10px] truncate">
-                                  🎯 {cl.eisa_focus_area}
-                                </span>
-                              )}
                             </div>
-                            <div className="text-right shrink-0">
+                            <div className="text-right shrink-0 flex items-center gap-1.5">
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
                                 {cl.weighting_percentage}%
                               </span>
-                              <span className="text-[10px] text-slate-500 block">
+                              <span className="text-[10px] text-slate-500">
                                 {cl.recommended_question_count} Qs
                               </span>
                             </div>
                           </div>
                         ))}
                       </div>
-
-                      <p className="text-[10.5px] text-slate-500 italic">
-                        💡 Facilitator Note: You can still create your own additional generic, custom workplace (e.g. Spur), or FSA mock question sets on any cluster at any time!
-                      </p>
                     </div>
                   ) : masterIacTable.trim() ? (
                     <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center gap-2">
                       <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span>No clusters detected in table yet. Please make sure to copy the full Markdown table including the header and rows with &quot;|&quot;.</span>
+                      <span>No clusters detected yet. Paste the full Markdown table with &quot;|&quot; columns.</span>
                     </div>
                   ) : null}
                 </div>
@@ -2401,8 +2297,8 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                   <Plus className="w-3.5 h-3.5" />
                   <span>
                     {isQctoCourse && detectedClusters.length > 0
-                      ? `Create Course & Auto-Generate ${detectedClusters.length} Clusters`
-                      : 'Create Course Container'}
+                      ? `Create Course (${detectedClusters.length} Clusters)`
+                      : 'Create Course'}
                   </span>
                 </button>
               </div>
@@ -2447,8 +2343,9 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                         if (cl) {
                           const existingClusterSets = AppStore.getQuestionSets(cl.id);
                           const savedExtract = existingClusterSets.find(s => s.raw_notebook_extract && s.raw_notebook_extract.trim().length > 0)?.raw_notebook_extract;
-                          if (savedExtract && !notebookExtract.trim()) {
+                          if (savedExtract) {
                             setNotebookExtract(savedExtract);
+                            setShowNotebookFields(false);
                           }
                         }
                         if (isBrainCertBankSet) {
@@ -2480,9 +2377,8 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                   <div className="sm:col-span-5">
                     {isBrainCertBankSet ? (
                       <div>
-                        <label className="text-xs font-bold text-[#1e3a5f] mb-1 flex items-center justify-between">
-                          <span>BrainCert Objective ID</span>
-                          <span className="text-[10px] font-normal text-slate-500">Editable later</span>
+                        <label className="text-xs font-bold text-[#1e3a5f] mb-1 block">
+                          BrainCert Objective ID
                         </label>
                         <input
                           type="text"
@@ -2541,12 +2437,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
 
               {/* Row 2: Question Set Type (Full width, 2-row grid with automatic recommended defaults) */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-bold text-slate-700">2. Question Set Type</label>
-                  <span className="text-[10.5px] text-slate-500">
-                    Auto-selects recommended count, mode &amp; timer below
-                  </span>
-                </div>
+                <label className="text-xs font-bold text-slate-700 mb-1.5 block">2. Question Set Type</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {/* Option 1: Generic Standard */}
                   <label
@@ -2687,147 +2578,84 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                 </div>
               </div>
 
-              {/* Custom Context Box (Directly above prompt when isCustomSet is active) */}
+              {/* Custom Context Box (When Custom Workplace is selected) */}
               {isCustomSet && (
                 <div className="p-3 bg-[#F1F9F3] border border-[#6DC082]/30 rounded-xl space-y-1">
-                  <label className="text-xs font-bold text-[#2e7d32] flex items-center justify-between">
-                    <span>Custom Operational Environment Context:</span>
-                    <span className="text-[10px] font-normal text-slate-500">Included dynamically in prompt</span>
+                  <label className="text-xs font-bold text-[#2e7d32] block">
+                    Custom Workplace Context
                   </label>
                   <textarea
                     value={customContext}
                     onChange={(e) => setCustomContext(e.target.value)}
                     rows={2}
-                    placeholder="e.g. Spur Corporation employees working in a distribution warehouse in Montague Gardens dealing with cold storage, oil spills, and pallet heights..."
-                    className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-[#4682B4]"
+                    placeholder="e.g. Spur Corporation distribution warehouse in Montague Gardens dealing with cold storage, oil spills, and pallet heights..."
+                    className="w-full px-3 py-1.5 text-xs border border-slate-200 bg-white rounded-lg focus:outline-none focus:border-[#4682B4]"
                   />
                 </div>
               )}
 
               {/* Step 3: Progressive Disclosure Notebook Prompt & Extract */}
-              {!notebookExtract.trim() ? (
-                /* STATE A: Extract is empty -> Show guided Copy Prompt banner + Paste box */
-                <div className="space-y-2.5">
-                  <div className="p-3 bg-[#4682B4]/10 border border-[#4682B4]/30 rounded-xl flex items-center justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-xs font-bold text-[#1e3a5f] flex items-center gap-1.5">
-                          <Sparkles className="w-4 h-4 text-[#4682B4]" />
-                          Copy Gemini Notebook Prompt (Learner Guide + EISA Specs)
-                        </h4>
-                        <span className="px-2 py-0.5 rounded text-[10.5px] font-semibold bg-[#4682B4]/20 text-[#1e3a5f] border border-[#4682B4]/30">
-                          🎯 Targets:{' '}
-                          {targetClusterId === 'new'
-                            ? (newClusterNumber
-                              ? `Cluster ${newClusterNumber}${newClusterTitle ? ` (${newClusterTitle})` : ''}`
-                              : '⚠️ Fill Cluster # above')
-                            : `Cluster ${modalClusterNum}`}
-                          {isBrainCertBankSet
-                            ? ` • BrainCert 60-Q Multi-Format Pool`
-                            : isFsaMockSet
-                              ? ` • Cluster ${modalClusterNum} IACs Only`
-                              : (isCustomSet && clientName && clientName !== 'Generic Standard' ? ` • ${clientName}` : ' • Generic Standard')}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-600">
-                        {targetClusterId === 'new' && !newClusterNumber ? (
-                          <span className="text-amber-700 font-medium">
-                            Fill in New Cluster Number &amp; Title above first so the prompt targets your exact topic!
-                          </span>
-                        ) : (
-                          'Select your Learner Guide & EISA doc in NotebookLM, paste this prompt, and copy the extract back below.'
-                        )}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleCopyNotebookPrompt}
-                      className="px-3.5 py-1.5 bg-[#4682B4] hover:bg-[#3b6f9a] text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 transition-colors shrink-0"
-                    >
-                      {promptCopied ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Copied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copy Prompt</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 mb-1 block">
-                      Paste Gemini Notebook Extract (Learner Guide SOPs &amp; EISA Assessment Criteria)
-                    </label>
-                    <textarea
-                      value={notebookExtract}
-                      onChange={(e) => setNotebookExtract(e.target.value)}
-                      rows={3}
-                      placeholder="Paste the generated response from your Gemini Notebook here..."
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#4682B4] font-mono"
-                    />
-                  </div>
+              {notebookExtract.trim() && !showNotebookFields ? (
+                /* COLLAPSED: Single subtle button when extract is already present */
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setShowNotebookFields(true)}
+                    className="w-full py-2 px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 flex items-center justify-between transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>NotebookLM Extract Ready</span>
+                    </span>
+                    <span className="text-[#4682B4] font-bold flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Recreate Prompt / Edit Extract</span>
+                    </span>
+                  </button>
                 </div>
               ) : (
-                /* STATE B: Extract is already pasted -> Collapse big blue banner into a sleek inline action bar! */
-                <div className="p-3 bg-emerald-50/40 border border-emerald-200 rounded-xl space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        <span>NotebookLM Extract Ready</span>
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                        {notebookExtract.trim().split(/\s+/).length} words loaded
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                        🎯 {targetClusterId === 'new' ? `Cluster ${newClusterNumber || 'New'}` : `Cluster ${modalClusterNum}`}
-                        {isBrainCertBankSet ? ' • BrainCert 60-Q' : isFsaMockSet ? ' • FSA Mock' : isCustomSet ? ` • ${clientName}` : ' • Generic'}
-                      </span>
-                    </div>
-
+                /* EXPANDED: Show Copy Prompt button + Paste Extract textarea */
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-slate-700">
+                      3. NotebookLM Source Extract
+                    </span>
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={handleCopyNotebookPrompt}
-                        className="px-2.5 py-1 bg-[#4682B4] hover:bg-[#3b6f9a] text-white text-[11px] font-bold rounded-md flex items-center gap-1 transition-colors"
-                        title="Copy a fresh prompt tailored to your current Cluster & Question Set Type selection"
+                        className="px-3 py-1 bg-[#4682B4] hover:bg-[#3b6f9a] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors"
                       >
                         {promptCopied ? (
                           <>
-                            <Check className="w-3 h-3" />
+                            <Check className="w-3.5 h-3.5" />
                             <span>Prompt Copied!</span>
                           </>
                         ) : (
                           <>
-                            <Sparkles className="w-3 h-3" />
-                            <span>Recreate / Copy Prompt</span>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copy Notebook Prompt</span>
                           </>
                         )}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNotebookExtract('');
-                          handleCopyNotebookPrompt();
-                        }}
-                        className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 text-[11px] font-semibold rounded-md transition-colors"
-                        title="Clear current extract and copy new prompt to clipboard"
-                      >
-                        Clear &amp; New
-                      </button>
+                      {notebookExtract.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => setShowNotebookFields(false)}
+                          className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 text-xs font-semibold rounded-lg transition-colors"
+                        >
+                          Hide
+                        </button>
+                      )}
                     </div>
                   </div>
 
                   <textarea
                     value={notebookExtract}
                     onChange={(e) => setNotebookExtract(e.target.value)}
-                    rows={2}
-                    placeholder="Paste the generated response from your Gemini Notebook here..."
-                    className="w-full px-2.5 py-1.5 text-[11px] bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-[#4682B4] font-mono text-slate-700"
+                    rows={3}
+                    placeholder="Copy the prompt above into NotebookLM, then paste the generated response here..."
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-[#4682B4] font-mono"
                   />
                 </div>
               )}
@@ -2835,42 +2663,21 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
               {/* Parameters Row */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
-                    <span>Question Count</span>
-                    {(() => {
-                      const activeCl = clusters.find(c => c.id === targetClusterId) || selectedCluster;
-                      if (isBrainCertBankSet) {
-                        return (
-                          <span className="text-[10px] font-bold text-[#1e3a5f] bg-sky-100 px-1.5 py-0.2 rounded border border-[#4682B4]/30">
-                            🎯 BrainCert: 60 Qs
-                          </span>
-                        );
-                      }
-                      if (activeCl?.recommended_question_count) {
-                        return (
-                          <span 
-                            className="text-[10px] font-bold text-[#2e7d32] bg-[#6DC082]/15 px-1.5 py-0.2 rounded border border-[#6DC082]/30"
-                            title={`Based on ${activeCl.weighting_percentage || 50}% curriculum weighting`}
-                          >
-                            🎯 Rec: {activeCl.recommended_question_count} Qs
-                          </span>
-                        );
-                      }
-                      return null;
-                    })()}
+                  <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                    Question Count
                   </label>
                   <select
                     value={questionCount}
                     onChange={(e) => setQuestionCount(Number(e.target.value))}
-                    className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none"
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none bg-white"
                   >
-                    <option value={8}>8 Questions {(clusters.find(c => c.id === targetClusterId) || selectedCluster)?.recommended_question_count === 8 ? '⭐ (Recommended Minimum)' : ''}</option>
-                    <option value={10}>10 Questions {(clusters.find(c => c.id === targetClusterId) || selectedCluster)?.recommended_question_count === 10 ? '⭐ (Recommended Standard)' : ''}</option>
-                    <option value={12}>12 Questions {(clusters.find(c => c.id === targetClusterId) || selectedCluster)?.recommended_question_count === 12 ? '⭐ (Recommended)' : ''}</option>
-                    <option value={15}>15 Questions {(clusters.find(c => c.id === targetClusterId) || selectedCluster)?.recommended_question_count === 15 ? '⭐ (Recommended Maximum)' : ''}</option>
-                    <option value={20}>20 Questions (Extended Assessment / 1x Draw)</option>
-                    <option value={40}>40 Questions (2x Rotation Pool)</option>
-                    <option value={60}>60 Questions 🌟 (BrainCert Full 3x EISA Rotation Pool)</option>
+                    <option value={8}>8 Questions</option>
+                    <option value={10}>10 Questions</option>
+                    <option value={12}>12 Questions</option>
+                    <option value={15}>15 Questions</option>
+                    <option value={20}>20 Questions</option>
+                    <option value={40}>40 Questions</option>
+                    <option value={60}>60 Questions (3x Pool)</option>
                   </select>
                 </div>
 
@@ -2879,22 +2686,22 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                   <select
                     value={targetLevel}
                     onChange={(e) => setTargetLevel(e.target.value as CognitiveTargetLevel)}
-                    className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none"
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none bg-white"
                   >
-                    <option value="foundational">Foundational (~70% Recall)</option>
-                    <option value="operational">Operational (~55% Recall, ~35% Apply)</option>
-                    <option value="advanced">Advanced (~40% Apply, ~20% Analyze)</option>
+                    <option value="foundational">Foundational</option>
+                    <option value="operational">Operational</option>
+                    <option value="advanced">Advanced</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 mb-1 block">Default Entry Mode</label>
+                  <label className="text-xs font-semibold text-slate-700 mb-1 block">Entry Mode</label>
                   <select
                     value={defaultEntryMode}
                     onChange={(e) => setDefaultEntryMode(e.target.value as any)}
-                    className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none"
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none bg-white"
                   >
-                    <option value="group">Group Mode (Table Teams)</option>
+                    <option value="group">Group Mode</option>
                     <option value="individual">Individual Mode</option>
                   </select>
                 </div>
@@ -2902,81 +2709,58 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
 
               {/* Timing Options */}
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-[#4682B4]" />
-                    Session Timing Mode & Duration:
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-normal">
-                    Controls classroom countdown & learner pace
-                  </span>
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-[#4682B4]" />
+                  <span>Session Timing</span>
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setTimingMode('overall')}
-                    className={`p-2.5 rounded-lg border text-left text-xs transition-all ${
+                    className={`py-2 px-3 rounded-lg border text-center text-xs font-bold transition-all ${
                       timingMode === 'overall'
                         ? 'bg-[#4682B4] text-white border-[#4682B4] shadow-xs'
                         : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
                     }`}
                   >
-                    <div className="font-bold flex items-center justify-between">
-                      <span>Overall Time</span>
-                      <span className={`text-[10px] px-1 rounded ${timingMode === 'overall' ? 'bg-white/20' : 'bg-slate-100'}`}>Total</span>
-                    </div>
-                    <p className={`text-[10px] mt-0.5 ${timingMode === 'overall' ? 'text-white/80' : 'text-slate-500'}`}>
-                      e.g. 20 min session
-                    </p>
+                    Overall Time
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setTimingMode('per_question')}
-                    className={`p-2.5 rounded-lg border text-left text-xs transition-all ${
+                    className={`py-2 px-3 rounded-lg border text-center text-xs font-bold transition-all ${
                       timingMode === 'per_question'
                         ? 'bg-[#4682B4] text-white border-[#4682B4] shadow-xs'
                         : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
                     }`}
                   >
-                    <div className="font-bold flex items-center justify-between">
-                      <span>Per Question</span>
-                      <span className={`text-[10px] px-1 rounded ${timingMode === 'per_question' ? 'bg-white/20' : 'bg-slate-100'}`}>Standard</span>
-                    </div>
-                    <p className={`text-[10px] mt-0.5 ${timingMode === 'per_question' ? 'text-white/80' : 'text-slate-500'}`}>
-                      e.g. 45s countdown
-                    </p>
+                    Per Question
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setTimingMode('untimed')}
-                    className={`p-2.5 rounded-lg border text-left text-xs transition-all ${
+                    className={`py-2 px-3 rounded-lg border text-center text-xs font-bold transition-all ${
                       timingMode === 'untimed'
                         ? 'bg-[#4682B4] text-white border-[#4682B4] shadow-xs'
                         : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
                     }`}
                   >
-                    <div className="font-bold flex items-center justify-between">
-                      <span>Untimed / Manual</span>
-                      <span className={`text-[10px] px-1 rounded ${timingMode === 'untimed' ? 'bg-white/20' : 'bg-slate-100'}`}>No Timer</span>
-                    </div>
-                    <p className={`text-[10px] mt-0.5 ${timingMode === 'untimed' ? 'text-white/80' : 'text-slate-500'}`}>
-                      Facilitator-paced
-                    </p>
+                    Untimed
                   </button>
                 </div>
 
                 {timingMode === 'overall' && (
                   <div className="flex items-center gap-2 pt-1 text-xs">
-                    <span className="text-slate-600 font-medium">Total Session Duration:</span>
+                    <span className="text-slate-600 font-medium">Duration:</span>
                     <input
                       type="number"
                       min={1}
                       max={120}
                       value={overallTimeMinutes}
                       onChange={(e) => setOverallTimeMinutes(Math.max(1, Number(e.target.value)))}
-                      className="w-20 px-2 py-1 border border-slate-300 rounded font-bold text-center bg-white"
+                      className="w-16 px-2 py-1 border border-slate-300 rounded font-bold text-center bg-white"
                     />
                     <span className="text-slate-500 font-semibold">minutes</span>
                   </div>
@@ -2994,7 +2778,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                       <option value={45}>45 seconds</option>
                       <option value={60}>60 seconds</option>
                       <option value={90}>90 seconds</option>
-                      <option value={120}>120 seconds (Complex quantitative)</option>
+                      <option value={120}>120 seconds</option>
                     </select>
                   </div>
                 )}
@@ -3022,7 +2806,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                   {isGenerating ? (
                     <>
                       <Sparkles className="w-4 h-4 animate-spin" />
-                      <span>Generating with Gemini 3.8 Flash...</span>
+                      <span>Generating...</span>
                     </>
                   ) : (
                     <>

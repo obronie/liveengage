@@ -134,19 +134,11 @@ export default function HistoryPage() {
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-[#4682B4] uppercase tracking-wider mb-1">
-              <History className="w-4 h-4" />
-              <span>Compliance & Analytics Archive</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">
-              Session History & Learner Records
-            </h1>
-            <p className="text-sm text-slate-600 mt-0.5">
-              Complete automated logging of client sessions, cohort numbers (1–10), participant rosters, and response timestamps.
-            </p>
-          </div>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2.5">
+            <History className="w-6 h-6 text-[#4682B4]" />
+            <span>Session History</span>
+          </h1>
 
           {/* Search Box */}
           <div className="relative max-w-xs w-full">
