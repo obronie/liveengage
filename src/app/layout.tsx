@@ -16,7 +16,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: '#4682B4',
+  themeColor: '#00B0F0',
 };
 
 export default function RootLayout({
@@ -30,11 +30,11 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body className="bg-[#F1F9F3] text-slate-800 min-h-screen flex flex-col selection:bg-[#6DC082] selection:text-white font-sans antialiased">
+      <body className="bg-[#F8FAFC] text-slate-900 min-h-screen flex flex-col selection:bg-[#00B0F0] selection:text-white font-sans antialiased">
         {children}
         <script
           dangerouslySetInnerHTML={{

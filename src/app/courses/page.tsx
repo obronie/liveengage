@@ -56,12 +56,16 @@ import {
   Download,
   ExternalLink,
   Code,
-  Calculator
+  Calculator,
+  RotateCw
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { ClassroomQAWheelModal } from '@/components/ClassroomQAWheelModal';
+import { useIlearnSync } from '@/lib/ilearnSync';
 
 export default function CoursesPage() {
   const router = useRouter();
+  const { isEmbedded, learners } = useIlearnSync();
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [clusters, setClusters] = useState<CourseCluster[]>([]);
@@ -78,6 +82,7 @@ export default function CoursesPage() {
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [showGeneratorModal, setShowGeneratorModal] = useState(false);
   const [showFsaPaperModal, setShowFsaPaperModal] = useState(false);
+  const [showQAWheelModal, setShowQAWheelModal] = useState(false);
   const [fsaPaperMode, setFsaPaperMode] = useState<'paper' | 'projector' | 'memo'>('paper');
   const [isProjectorFullscreen, setIsProjectorFullscreen] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
@@ -1141,18 +1146,18 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
     : (modalTargetCluster?.cluster_number || '1.1');
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F1F9F3]">
+    <div className="min-h-screen flex flex-col bg-[#F8FAFC]">
       <Navbar />
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full space-y-5">
+      <main className={`flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full space-y-5 ${isEmbedded ? 'py-2 sm:py-3' : 'py-6'}`}>
         
         {/* TOP BAR: Clean Course Selector, 2 Document Badges, +Generate Set, +Add Course */}
-        <div className="bg-white border border-[#D5E3EF] rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           
           {/* Left: Course Selection & Status */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-[#4682B4] shrink-0" />
+              <BookOpen className="w-5 h-5 text-[#00B0F0] shrink-0" />
               <label htmlFor="course-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Course:
               </label>
@@ -1303,10 +1308,10 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
           
           {/* LEFT COLUMN (4 of 12): All Clusters Listed with Question Sets & Historical Activity */}
           <div className="lg:col-span-4 space-y-4">
-            <div className="bg-white border border-[#D5E3EF] rounded-2xl p-4 shadow-xs space-y-3">
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <Layers className="w-4 h-4 text-[#4682B4]" />
+                  <Layers className="w-4 h-4 text-[#00B0F0]" />
                   Curriculum Clusters ({clusters.length})
                 </span>
                 <span className="text-xs font-semibold text-slate-500">
@@ -1743,7 +1748,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
 
                         {/* Workplace Rationale */}
                         {q.additional_text && (
-                          <div className="bg-[#D5E3EF]/30 p-2.5 rounded-lg border border-[#D5E3EF] text-xs">
+                          <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-xs">
                             <span className="font-bold text-slate-700 block mb-0.5">EISA Debrief / Scoring Rubric:</span>
                             <p className="text-slate-600">{q.additional_text}</p>
                           </div>
@@ -1755,12 +1760,12 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
               </div>
             ) : selectedSet ? (
               /* Standard Question Set Editor */
-              <div className="bg-white border border-[#D5E3EF] rounded-2xl p-5 shadow-xs space-y-4">
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
                 {/* Header: Cluster Question Bank + Set Name on the SAME line */}
                 <div className="pb-3 border-b border-slate-100">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <h3 className="text-base font-bold text-slate-800 flex items-center gap-2.5 flex-wrap">
-                      <span className="text-[#4682B4]">
+                      <span className="text-[#00B0F0]">
                         Cluster {selectedCluster?.cluster_number || '2.4'}
                       </span>
                       <span className="text-slate-300 font-normal">|</span>
@@ -1770,6 +1775,17 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                     </h3>
 
                     <div className="flex items-center gap-2 flex-wrap">
+                      {/* 🎯 Q&A Wheel Presenter */}
+                      <button
+                        type="button"
+                        onClick={() => setShowQAWheelModal(true)}
+                        className="px-3.5 py-1 bg-[#00B0F0] hover:bg-[#0090C0] text-white text-xs font-bold rounded-lg border border-[#0090C0]/50 transition-all flex items-center gap-1.5 shrink-0 shadow-xs hover:shadow-md cursor-pointer"
+                        title="Open Interactive Classroom Q&A & Name Wheel Presenter"
+                      >
+                        <RotateCw className="w-3.5 h-3.5" />
+                        <span>🎯 Q&A Wheel</span>
+                      </button>
+
                       {/* BrainCert LMS EISA Export & Setup Hub */}
                       <button
                         type="button"
@@ -1779,10 +1795,10 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                           }
                           setShowBrainCertModal(true);
                         }}
-                        className="px-3 py-1 bg-[#1e3a5f] hover:bg-[#4682B4] text-white text-xs font-bold rounded-lg border border-[#4682B4]/40 transition-colors flex items-center gap-1.5 shrink-0 shadow-2xs"
+                        className="px-3 py-1 bg-[#1F3864] hover:bg-[#0570B0] text-white text-xs font-bold rounded-lg border border-[#1F3864]/40 transition-colors flex items-center gap-1.5 shrink-0 shadow-2xs cursor-pointer"
                         title="Open BrainCert LMS EISA Assessment Setup, Mobile HTML Instructions & Multi-Format CSV Export"
                       >
-                        <FileSpreadsheet className="w-3.5 h-3.5 text-[#6DC082]" />
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-[#00B0F0]" />
                         <span>BrainCert Export</span>
                       </button>
 
@@ -2149,7 +2165,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                         )}
 
                         {/* Debrief & Workplace Rationale */}
-                        <div className="bg-[#D5E3EF]/30 p-2.5 rounded-lg border border-[#D5E3EF]">
+                        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
                           <label className="text-[10px] font-bold text-slate-700 block mb-1 uppercase tracking-wider">
                             Model Answer &amp; Marking Guide
                           </label>
@@ -2157,7 +2173,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                             value={q.additional_text || ''}
                             onChange={(e) => handleUpdateQuestion(qIndex, { additional_text: e.target.value })}
                             rows={3}
-                            className="w-full text-[11px] text-slate-800 bg-white border border-slate-200 rounded p-1.5 focus:outline-none focus:border-[#4682B4] font-mono leading-relaxed"
+                            className="w-full text-[11px] text-slate-800 bg-white border border-slate-200 rounded p-1.5 focus:outline-none focus:border-[#00B0F0] font-mono leading-relaxed"
                             placeholder="🟢 Model Answer: [Step-by-step numbers or procedural standard]&#10;&#10;📝 How the Assessor Marks This: [Mark breakdown and common learner pitfalls]"
                           />
                         </div>
@@ -2167,7 +2183,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                 </div>
               </div>
             ) : (
-              <div className="bg-white border border-[#D5E3EF] rounded-2xl p-12 text-center shadow-xs">
+              <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center shadow-xs">
                 <FileQuestion className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <h3 className="text-base font-bold text-slate-700">No Question Set Selected</h3>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
@@ -2182,7 +2198,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
       {/* Course Modal */}
       {showCourseModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white border border-[#D5E3EF] rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden p-6 space-y-4 my-8">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden p-6 space-y-4 my-8">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="text-lg font-bold text-slate-800">
                 Add New Course
@@ -2355,7 +2371,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
       {/* UNIFIED GENERATE SET MODAL (Combines +New Cluster and +Generate Set) */}
       {showGeneratorModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white border border-[#D5E3EF] rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden p-6 space-y-4 my-8">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden p-6 space-y-4 my-8">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="text-lg font-bold text-slate-800">
                 Generate Question Set
@@ -2869,7 +2885,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
       {/* EDIT QUESTION SET SETTINGS MODAL */}
       {showEditSetModal && editingSet && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white border border-[#D5E3EF] rounded-2xl max-w-lg w-full shadow-2xl p-6 space-y-4 my-8 animate-in fade-in duration-150">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full shadow-2xl p-6 space-y-4 my-8 animate-in fade-in duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2 text-[#4682B4]">
                 <Edit3 className="w-5 h-5" />
@@ -4021,6 +4037,15 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
           }
         }
       `}} />
+
+      {/* Interactive Classroom Q&A & Name Wheel Modal */}
+      {showQAWheelModal && selectedSet && (
+        <ClassroomQAWheelModal
+          set={selectedSet}
+          initialLearners={learners}
+          onClose={() => setShowQAWheelModal(false)}
+        />
+      )}
     </div>
   );
 }

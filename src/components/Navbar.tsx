@@ -33,8 +33,10 @@ import {
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { AppStore } from '@/lib/store';
 import { Course, CourseCluster, QuestionSet, Session, SessionEntryMode } from '@/types';
+import { useIlearnSync } from '@/lib/ilearnSync';
 
 export function Navbar() {
+  const { isEmbedded } = useIlearnSync();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -171,24 +173,28 @@ export function Navbar() {
     }
   };
 
+  if (isEmbedded) {
+    return null;
+  }
+
   return (
     <>
-      <header className="border-b border-[#D5E3EF] bg-white/95 backdrop-blur sticky top-0 z-40 shadow-xs">
+      <header className="border-b border-slate-200 bg-white/95 backdrop-blur sticky top-0 z-40 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           
-          {/* BRAND: Keep logo image + Heading "Learner Polling" with LearnBlended */}
+          {/* BRAND: iLearn / LiveEngage visual unity */}
           <div className="flex items-center gap-3">
             <Link href="/courses" className="flex items-center gap-2.5 group">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#4682B4] to-[#6DC082] p-0.5 shadow-md shadow-[#4682B4]/15 group-hover:scale-105 transition-transform">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#00B0F0] to-[#1F3864] p-0.5 shadow-md shadow-[#00B0F0]/15 group-hover:scale-105 transition-transform">
                 <div className="w-full h-full bg-white rounded-[10px] flex items-center justify-center">
-                  <Radio className="w-5 h-5 text-[#4682B4]" />
+                  <Radio className="w-5 h-5 text-[#00B0F0]" />
                 </div>
               </div>
               <div>
-                <span className="text-lg font-bold tracking-tight text-[#1e293b] flex items-center gap-2">
-                  LearnBlended
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#6DC082]/15 text-[#2b773f] border border-[#6DC082]/30 font-bold">
-                    Polling
+                <span className="text-lg font-bold tracking-tight text-[#1F3864] flex items-center gap-2">
+                  LiveEngage
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-sky-50 text-[#00B0F0] border border-sky-200 font-bold">
+                    Classroom
                   </span>
                 </span>
               </div>
@@ -201,11 +207,11 @@ export function Navbar() {
               href="/courses"
               className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
                 pathname.startsWith('/courses') || pathname === '/'
-                  ? 'bg-[#4682B4]/10 text-[#4682B4] border border-[#4682B4]/30' 
-                  : 'text-slate-600 hover:text-[#4682B4] hover:bg-slate-100'
+                  ? 'bg-[#1F3864]/10 text-[#1F3864] border border-[#1F3864]/30' 
+                  : 'text-slate-600 hover:text-[#1F3864] hover:bg-slate-100'
               }`}
             >
-              <Layers className="w-4 h-4" />
+              <Layers className="w-4 h-4 text-[#00B0F0]" />
               <span className="hidden md:inline">Courses & Questions</span>
               <span className="md:hidden">Questions</span>
             </Link>
@@ -214,7 +220,7 @@ export function Navbar() {
             <button
               onClick={handleInstantLaunchLive}
               disabled={isLaunching}
-              className="px-3.5 py-1.5 text-xs sm:text-sm font-bold bg-[#6DC082] hover:bg-[#5cb372] text-white rounded-lg shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50"
+              className="px-3.5 py-1.5 text-xs sm:text-sm font-bold bg-[#00B0F0] hover:bg-[#0090C0] text-white rounded-lg shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
               title="Launch Live Session Immediately (Zero Popups)"
             >
               <Play className="w-3.5 h-3.5" />
@@ -225,20 +231,20 @@ export function Navbar() {
             <Link
               href="/play"
               target="_blank"
-              className="px-3 py-1.5 text-xs sm:text-sm font-medium text-[#2e7d32] bg-[#6DC082]/15 hover:bg-[#6DC082]/25 border border-[#6DC082]/30 rounded-lg transition-colors flex items-center gap-1.5"
+              className="px-3 py-1.5 text-xs sm:text-sm font-medium text-[#1F3864] bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-lg transition-colors flex items-center gap-1.5"
               title="Open Learner Mobile View in New Tab"
             >
-              <Smartphone className="w-4 h-4 text-[#2e7d32]" />
+              <Smartphone className="w-4 h-4 text-[#00B0F0]" />
               <span className="hidden sm:inline">Learner Screen</span>
             </Link>
 
             {/* Step-by-Step Facilitator Process Guide Button */}
             <button
               onClick={() => setShowHelpModal(true)}
-              className="px-3 py-1.5 text-xs sm:text-sm font-semibold text-[#4682B4] hover:bg-[#4682B4]/10 rounded-lg border border-[#4682B4]/30 transition-colors flex items-center gap-1.5"
+              className="px-3 py-1.5 text-xs sm:text-sm font-semibold text-[#1F3864] hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors flex items-center gap-1.5"
               title="Facilitator Guide & Help"
             >
-              <HelpCircle className="w-4 h-4 text-[#4682B4]" />
+              <HelpCircle className="w-4 h-4 text-[#00B0F0]" />
               <span className="hidden sm:inline">Guide</span>
             </button>
 
