@@ -384,7 +384,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       const height = canvas.height;
       const centerX = width / 2;
       const centerY = height / 2;
-      const radius = Math.min(centerX, centerY) - 24;
+      const radius = Math.min(centerX, centerY) - 18;
 
       ctx.clearRect(0, 0, width, height);
 
@@ -395,7 +395,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       // Outer subtle shadow base
       ctx.save();
       ctx.beginPath();
-      ctx.arc(centerX, centerY, radius + 6, 0, 2 * Math.PI);
+      ctx.arc(centerX, centerY, radius + 4, 0, 2 * Math.PI);
       ctx.fillStyle = '#E2E8F0';
       ctx.fill();
       ctx.restore();
@@ -419,7 +419,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
 
         // Clean white separator line
         ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 2;
         ctx.stroke();
 
         // Radial Learner Name Text
@@ -431,20 +431,20 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
         ctx.fillStyle = '#FFFFFF';
 
         let displayName = items[i];
-        if (numSlices > 16 && displayName.length > 13) {
-          displayName = displayName.substring(0, 12) + '…';
-        } else if (displayName.length > 18) {
-          displayName = displayName.substring(0, 17) + '…';
+        if (numSlices > 16 && displayName.length > 12) {
+          displayName = displayName.substring(0, 11) + '…';
+        } else if (displayName.length > 16) {
+          displayName = displayName.substring(0, 15) + '…';
         }
 
         ctx.font =
-          numSlices > 20
-            ? 'bold 11px system-ui, -apple-system, sans-serif'
-            : 'bold 13px system-ui, -apple-system, sans-serif';
+          numSlices > 18
+            ? 'bold 9.5px system-ui, -apple-system, sans-serif'
+            : 'bold 11px system-ui, -apple-system, sans-serif';
 
         ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-        ctx.shadowBlur = 3;
-        ctx.fillText(displayName, radius - 20, 0);
+        ctx.shadowBlur = 2.5;
+        ctx.fillText(displayName, radius - 14, 0);
         ctx.restore();
       }
 
@@ -452,7 +452,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       ctx.beginPath();
       ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
       ctx.strokeStyle = '#1F3864';
-      ctx.lineWidth = 5;
+      ctx.lineWidth = 4;
       ctx.stroke();
 
       // Outer Rim Mechanical Pegs
@@ -462,37 +462,37 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
         const pegY = centerY + radius * Math.sin(pegA);
 
         ctx.beginPath();
-        ctx.arc(pegX, pegY, 3.5, 0, 2 * Math.PI);
+        ctx.arc(pegX, pegY, 2.5, 0, 2 * Math.PI);
         ctx.fillStyle = '#FFFFFF';
         ctx.fill();
         ctx.strokeStyle = '#1F3864';
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1.2;
         ctx.stroke();
 
         ctx.beginPath();
-        ctx.arc(pegX, pegY, 1.5, 0, 2 * Math.PI);
+        ctx.arc(pegX, pegY, 1.2, 0, 2 * Math.PI);
         ctx.fillStyle = '#00B0F0';
         ctx.fill();
       }
 
       // Center Hub Outer White Ring
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 44, 0, 2 * Math.PI);
+      ctx.arc(centerX, centerY, 30, 0, 2 * Math.PI);
       ctx.fillStyle = '#FFFFFF';
       ctx.fill();
       ctx.strokeStyle = '#1F3864';
-      ctx.lineWidth = 4;
+      ctx.lineWidth = 3;
       ctx.stroke();
 
       // Center Hub Inner Cyan Ring
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 36, 0, 2 * Math.PI);
+      ctx.arc(centerX, centerY, 23, 0, 2 * Math.PI);
       ctx.fillStyle = '#00B0F0';
       ctx.fill();
 
       // Center Hub "SPIN" Text
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = '900 13px system-ui, sans-serif';
+      ctx.font = '900 10.5px system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.shadowBlur = 0;
@@ -504,36 +504,36 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       ctx.rotate(flapperAngle);
 
       ctx.beginPath();
-      ctx.moveTo(-11, -8);
-      ctx.quadraticCurveTo(-7, 14, 0, 30);
-      ctx.quadraticCurveTo(7, 14, 11, -8);
+      ctx.moveTo(-9, -6);
+      ctx.quadraticCurveTo(-6, 11, 0, 24);
+      ctx.quadraticCurveTo(6, 11, 9, -6);
       ctx.closePath();
 
       ctx.fillStyle = '#EF4444'; // Bold Red
       ctx.fill();
       ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 2;
       ctx.stroke();
 
       // Needle center spine highlight
       ctx.beginPath();
-      ctx.moveTo(0, -6);
-      ctx.lineTo(0, 27);
+      ctx.moveTo(0, -5);
+      ctx.lineTo(0, 21);
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.2;
       ctx.stroke();
 
       // Hinge Pin
       ctx.beginPath();
-      ctx.arc(0, -5, 6, 0, 2 * Math.PI);
+      ctx.arc(0, -4, 4.5, 0, 2 * Math.PI);
       ctx.fillStyle = '#1F3864';
       ctx.fill();
       ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.5;
       ctx.stroke();
 
       ctx.beginPath();
-      ctx.arc(0, -5, 2.5, 0, 2 * Math.PI);
+      ctx.arc(0, -4, 2, 0, 2 * Math.PI);
       ctx.fillStyle = '#00B0F0';
       ctx.fill();
 
@@ -776,7 +776,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
     saveStoredLearners(DEFAULT_CORRUSEAL_LEARNERS);
   };
 
-  // Explanation fallback
+  // Explanation fallback with "How points are awarded / scoring rubric" stripped out
   const getExplanationText = (): string => {
     if (!currentQuestion) return '';
     const raw =
@@ -785,7 +785,21 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       (currentQuestion as unknown as { rationale?: string }).rationale ||
       (currentQuestion as unknown as { reason?: string }).reason;
     if (raw && raw.trim().length > 0) {
-      return raw;
+      // Strip out any section discussing how points/marks are awarded or assessor rubric
+      let cleaned = raw
+        .replace(/(?:📝\s*)?(?:How the Assessor Marks This|Marking & Distractor Guide|Scoring Rubric|Mark Breakdown|Points Awarded|How points are awarded)[\s\S]*$/i, '')
+        .trim();
+
+      // Filter out any standalone lines specifically describing points or marks awarded
+      cleaned = cleaned
+        .split('\n')
+        .filter((line) => !/^\s*(?:•|-|\*)?\s*(?:\d+\s*marks?|\d+\s*points?|full\s*\d+\s*marks?|zero\s*marks?)\s*(?:awarded|allocated|for\b)/i.test(line))
+        .join('\n')
+        .trim();
+
+      if (cleaned.length > 0) {
+        return cleaned;
+      }
     }
     const correctOptIndex = currentQuestion.correct_options[0] ?? 0;
     const correctText = currentQuestion.options[correctOptIndex] || 'Correct procedure';
@@ -801,29 +815,29 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       />
 
       {/* ==================================================================== */}
-      {/* TOP PRESENTER BAR                                                    */}
+      {/* TOP PRESENTER BAR (Compact Height)                                   */}
       {/* ==================================================================== */}
-      <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-xs z-20">
+      <header className="h-13 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center justify-between shrink-0 shadow-xs z-20">
         {/* Left: Brand + Set Title + Question Progress + Score */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 bg-[#00B0F0] text-white font-black rounded-xl flex items-center justify-center text-lg shadow-xs shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 bg-[#00B0F0] text-white font-black rounded-lg flex items-center justify-center text-base shadow-xs shrink-0">
             i
           </div>
           <div className="flex flex-col min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-black uppercase tracking-wider text-[#00B0F0] hidden sm:inline">
+              <span className="text-[11px] font-black uppercase tracking-wider text-[#00B0F0] hidden sm:inline">
                 LiveEngage
               </span>
-              <h2 className="text-sm sm:text-base font-bold text-[#1F3864] truncate">
+              <h2 className="text-xs sm:text-sm font-bold text-[#1F3864] truncate">
                 {set.title}
               </h2>
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="px-2 py-0.5 rounded-full font-bold bg-sky-50 text-[#00B0F0] border border-sky-200">
+            <div className="flex items-center gap-1.5 text-[11px]">
+              <span className="px-2 py-0.2 rounded-full font-bold bg-sky-50 text-[#00B0F0] border border-sky-200">
                 Question {currentQIndex + 1} of {totalQuestions}
               </span>
-              <span className="px-2 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                Correct: {score.correct} / {score.answered}
+              <span className="px-2 py-0.2 rounded-full font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                Score: {score.correct} / {score.answered}
                 {score.answered > 0 ? ` (${Math.round((score.correct / score.answered) * 100)}%)` : ''}
               </span>
             </div>
@@ -831,7 +845,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
         </div>
 
         {/* Right: Controls & Learner Pool Drawer Button */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {/* Sound Toggle */}
           <button
             onClick={() => setSoundEnabled((prev) => !prev)}
@@ -887,50 +901,53 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       {/* ==================================================================== */}
       {/* SPLIT-SCREEN MAIN STAGE                                              */}
       {/* ==================================================================== */}
-      <main className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-4 sm:p-6 flex-1 overflow-y-auto">
+      {/* ==================================================================== */}
+      {/* SPLIT-SCREEN MAIN STAGE (Compact No-Scroll Layout)                   */}
+      {/* ==================================================================== */}
+      <main className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 p-2.5 sm:p-3.5 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
         
         {/* ================================================================== */}
         {/* LEFT COLUMN: Spinning Name Wheel (5 Columns)                       */}
         {/* ================================================================== */}
-        <section className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 flex flex-col items-center justify-between shadow-xs">
+        <section className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-between shadow-xs min-h-0">
           
           {/* Wheel Title & Active Responder Pill */}
-          <div className="w-full text-center space-y-1">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-sky-50 text-[#00B0F0] border border-sky-200">
-              <RotateCw className="w-3 h-3 animate-spin text-[#00B0F0]" />
+          <div className="w-full text-center space-y-0.5 shrink-0">
+            <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-50 text-[#00B0F0] border border-sky-200">
+              <RotateCw className="w-2.5 h-2.5 animate-spin text-[#00B0F0]" />
               <span>Interactive Classroom Wheel</span>
             </div>
-            <h3 className="text-lg font-bold text-[#1F3864]">
+            <h3 className="text-xs sm:text-sm font-bold text-[#1F3864]">
               Spin to Choose Responder
             </h3>
           </div>
 
-          {/* HTML5 Canvas Wheel */}
-          <div className="relative my-4 flex items-center justify-center">
+          {/* HTML5 Canvas Wheel (270x270 Compact Height) */}
+          <div className="relative my-0.5 flex items-center justify-center shrink-0">
             <canvas
               ref={canvasRef}
-              width={380}
-              height={380}
+              width={270}
+              height={270}
               className="max-w-full h-auto drop-shadow-sm cursor-pointer select-none"
               onClick={handleSpinWheel}
             />
           </div>
 
           {/* Active Responder Banner */}
-          <div className="w-full space-y-3">
+          <div className="w-full space-y-2 shrink-0">
             <div
-              className={`p-3.5 rounded-xl text-center transition-all ${
+              className={`p-2.5 rounded-xl text-center transition-all ${
                 selectedLearner
-                  ? 'bg-gradient-to-r from-[#1F3864] to-[#0570B0] text-white shadow-md'
+                  ? 'bg-gradient-to-r from-[#1F3864] to-[#0570B0] text-white shadow-sm'
                   : 'bg-slate-50 border border-slate-200 text-slate-600'
               }`}
             >
-              <div className="text-[11px] font-bold uppercase tracking-wider text-cyan-200">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-cyan-200">
                 Current Respondent
               </div>
-              <div className="text-lg sm:text-xl font-black mt-0.5 truncate">
+              <div className="text-sm sm:text-base font-black mt-0.5 truncate">
                 {selectedLearner ? (
-                  <span className="flex items-center justify-center gap-2">
+                  <span className="flex items-center justify-center gap-1.5">
                     <span>🎤 {selectedLearner}</span>
                   </span>
                 ) : (
@@ -943,15 +960,15 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
             <button
               onClick={handleSpinWheel}
               disabled={isSpinning || remainingPool.length === 0}
-              className="w-full py-3.5 px-4 bg-[#00B0F0] hover:bg-[#0090C0] text-white font-extrabold text-base rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="w-full py-2.5 px-3 bg-[#00B0F0] hover:bg-[#0090C0] text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              <RotateCw className={`w-5 h-5 ${isSpinning ? 'animate-spin' : ''}`} />
+              <RotateCw className={`w-4 h-4 ${isSpinning ? 'animate-spin' : ''}`} />
               <span>{isSpinning ? 'Spinning Wheel...' : '🎯 Spin to Pick Learner'}</span>
             </button>
 
             {/* Pool status count & quick reset */}
-            <div className="flex items-center justify-between text-xs text-slate-500 px-1">
-              <span>{remainingPool.length} learners remaining in active pool</span>
+            <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
+              <span>{remainingPool.length} learners remaining</span>
               {pickedLearners.length > 0 && (
                 <button
                   onClick={() => {
@@ -960,7 +977,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
                   }}
                   className="text-[#00B0F0] hover:underline font-bold"
                 >
-                  Recycle All ({pickedLearners.length} picked)
+                  Recycle All ({pickedLearners.length})
                 </button>
               )}
             </div>
@@ -970,149 +987,146 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
         {/* ================================================================== */}
         {/* RIGHT COLUMN: Interactive Question & Answer Stage (7 Columns)     */}
         {/* ================================================================== */}
-        <section className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 flex flex-col justify-between shadow-xs">
+        <section className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 flex flex-col justify-between shadow-xs min-h-0 overflow-y-auto">
           
           {currentQuestion ? (
-            <div className="space-y-6">
-              {/* Question Header & Badges */}
-              <div className="space-y-3 pb-4 border-b border-slate-100">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#1F3864] text-white">
-                    Question {currentQIndex + 1} of {totalQuestions}
-                  </span>
-                  <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-900 border border-amber-200">
-                    {currentQuestion.marks || 1} {(currentQuestion.marks || 1) > 1 ? 'Marks' : 'Mark'}
-                  </span>
-                  <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700">
-                    Format: {currentQuestion.format || 'MCQ'}
-                  </span>
-                  {currentQuestion.guide_topic_hint && (
-                    <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-sky-50 text-[#00B0F0] border border-sky-100">
-                      📖 {currentQuestion.guide_topic_hint}
+            <div className="space-y-2.5 flex-1 min-h-0 flex flex-col justify-between">
+              <div>
+                {/* Question Header & Badges (Marks badge removed for clean classroom viewing) */}
+                <div className="space-y-1.5 pb-2 border-b border-slate-100">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#1F3864] text-white">
+                      Question {currentQIndex + 1} of {totalQuestions}
                     </span>
-                  )}
+                    <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700">
+                      {currentQuestion.format || 'MCQ'}
+                    </span>
+                    {currentQuestion.guide_topic_hint && (
+                      <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-sky-50 text-[#00B0F0] border border-sky-100 truncate max-w-xs">
+                        📖 {currentQuestion.guide_topic_hint}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* High-Contrast Question Stem */}
+                  <h1 className="text-base sm:text-lg md:text-xl font-bold text-[#1F3864] leading-snug">
+                    {currentQuestion.body}
+                  </h1>
                 </div>
 
-                {/* Big Question Stem */}
-                <h1 className="text-xl sm:text-2xl font-bold text-[#1F3864] leading-snug">
-                  {currentQuestion.body}
-                </h1>
-              </div>
+                {/* Interactive Options Cards */}
+                <div className="space-y-2 mt-2.5">
+                  {currentQuestion.options && currentQuestion.options.length > 0 ? (
+                    currentQuestion.options.map((opt, idx) => {
+                      const letter = String.fromCharCode(65 + idx); // A, B, C, D...
+                      const isSelected = selectedOptionIndex === idx;
+                      const isCorrect = currentQuestion.correct_options.includes(idx);
 
-              {/* Interactive Options Cards */}
-              <div className="space-y-3">
-                {currentQuestion.options && currentQuestion.options.length > 0 ? (
-                  currentQuestion.options.map((opt, idx) => {
-                    const letter = String.fromCharCode(65 + idx); // A, B, C, D...
-                    const isSelected = selectedOptionIndex === idx;
-                    const isCorrect = currentQuestion.correct_options.includes(idx);
+                      // Dynamic styling based on answer state
+                      let cardStyle = 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800 hover:border-[#00B0F0]/50';
+                      let letterStyle = 'bg-slate-100 text-[#1F3864]';
+                      let badge = null;
 
-                    // Dynamic styling based on answer state
-                    let cardStyle = 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800 hover:border-[#00B0F0]/50';
-                    let letterStyle = 'bg-slate-100 text-[#1F3864]';
-                    let badge = null;
-
-                    if (isRevealed) {
-                      if (isSelected && isCorrect) {
-                        cardStyle = 'bg-emerald-50 border-emerald-500 text-emerald-950 shadow-md ring-2 ring-emerald-300';
-                        letterStyle = 'bg-emerald-600 text-white';
-                        badge = (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-600 text-white">
-                            <Check className="w-3.5 h-3.5" />
-                            CORRECT!
-                          </span>
-                        );
-                      } else if (isSelected && !isCorrect) {
-                        cardStyle = 'bg-rose-50 border-rose-500 text-rose-950';
-                        letterStyle = 'bg-rose-600 text-white';
-                        badge = (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-rose-600 text-white">
-                            <X className="w-3.5 h-3.5" />
-                            Incorrect Choice
-                          </span>
-                        );
-                      } else if (isCorrect) {
-                        // Automatically highlight correct option if learner was wrong
-                        cardStyle = 'bg-emerald-50 border-emerald-500 text-emerald-950 ring-2 ring-emerald-400';
-                        letterStyle = 'bg-emerald-600 text-white';
-                        badge = (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-600 text-white">
-                            <Check className="w-3.5 h-3.5" />
-                            Correct Answer
-                          </span>
-                        );
-                      } else {
-                        cardStyle = 'bg-slate-50 border-slate-200 text-slate-400 opacity-60';
-                        letterStyle = 'bg-slate-200 text-slate-500';
+                      if (isRevealed) {
+                        if (isSelected && isCorrect) {
+                          cardStyle = 'bg-emerald-50 border-emerald-500 text-emerald-950 shadow-xs ring-1 ring-emerald-300';
+                          letterStyle = 'bg-emerald-600 text-white';
+                          badge = (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-600 text-white">
+                              <Check className="w-3 h-3" />
+                              CORRECT!
+                            </span>
+                          );
+                        } else if (isSelected && !isCorrect) {
+                          cardStyle = 'bg-rose-50 border-rose-500 text-rose-950';
+                          letterStyle = 'bg-rose-600 text-white';
+                          badge = (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-rose-600 text-white">
+                              <X className="w-3 h-3" />
+                              Incorrect
+                            </span>
+                          );
+                        } else if (isCorrect) {
+                          cardStyle = 'bg-emerald-50 border-emerald-500 text-emerald-950 ring-1 ring-emerald-400';
+                          letterStyle = 'bg-emerald-600 text-white';
+                          badge = (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-600 text-white">
+                              <Check className="w-3 h-3" />
+                              Correct Answer
+                            </span>
+                          );
+                        } else {
+                          cardStyle = 'bg-slate-50 border-slate-200 text-slate-400 opacity-60';
+                          letterStyle = 'bg-slate-200 text-slate-500';
+                        }
                       }
-                    }
 
-                    return (
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSelectOption(idx)}
+                          disabled={isRevealed}
+                          className={`w-full py-2.5 px-3 rounded-xl border-2 text-left transition-all flex items-start gap-3 cursor-pointer disabled:cursor-default ${cardStyle}`}
+                        >
+                          <div className={`w-7 h-7 rounded-lg font-bold flex items-center justify-center shrink-0 text-xs ${letterStyle}`}>
+                            {letter}
+                          </div>
+                          <div className="flex-1 min-w-0 pt-0.5">
+                            <p className="text-xs sm:text-sm md:text-base font-medium leading-normal">
+                              {opt}
+                            </p>
+                          </div>
+                          {badge && <div className="shrink-0 pt-0.5">{badge}</div>}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                      <p className="text-xs text-slate-600 font-medium">
+                        This question requires an open learner response or discussion.
+                      </p>
                       <button
-                        key={idx}
                         type="button"
-                        onClick={() => handleSelectOption(idx)}
-                        disabled={isRevealed}
-                        className={`w-full p-4 rounded-xl border-2 text-left transition-all flex items-start gap-3.5 cursor-pointer disabled:cursor-default ${cardStyle}`}
+                        onClick={() => setIsRevealed(true)}
+                        className="px-3.5 py-1.5 bg-[#00B0F0] text-white font-bold rounded-lg text-xs"
                       >
-                        <div className={`w-8 h-8 rounded-lg font-bold flex items-center justify-center shrink-0 text-sm ${letterStyle}`}>
-                          {letter}
-                        </div>
-                        <div className="flex-1 min-w-0 pt-0.5">
-                          <p className="text-base sm:text-lg font-medium leading-normal">
-                            {opt}
-                          </p>
-                        </div>
-                        {badge && <div className="shrink-0 pt-0.5">{badge}</div>}
+                        Reveal Model Answer & Rationale
                       </button>
-                    );
-                  })
-                ) : (
-                  // Fallback for non-MCQ / Open format questions
-                  <div className="p-5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                    <p className="text-sm text-slate-600 font-medium">
-                      This question requires an open learner response or discussion.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setIsRevealed(true)}
-                      className="px-4 py-2 bg-[#00B0F0] text-white font-bold rounded-lg text-sm"
-                    >
-                      Reveal Model Answer & Rationale
-                    </button>
-                  </div>
-                )}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Revealed Teaching & Explanation Panels */}
+              {/* Revealed Teaching & Explanation Panels (Points awarded rubric removed) */}
               {isRevealed && (
-                <div className="pt-2 animate-fadeIn">
+                <div className="pt-1 animate-fadeIn">
                   {selectedOptionIndex !== null && currentQuestion.correct_options.includes(selectedOptionIndex) ? (
                     // CORRECT ANSWER CELEBRATORY PANEL
-                    <div className="bg-emerald-50/90 border border-emerald-300 rounded-xl p-5 text-emerald-950 space-y-2 shadow-xs">
-                      <div className="flex items-center gap-2 font-bold text-emerald-800 text-sm">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                        <span>✓ Well Done! Model Explanation & Rationale:</span>
+                    <div className="bg-emerald-50/90 border border-emerald-300 rounded-xl p-3 text-emerald-950 space-y-1 shadow-2xs">
+                      <div className="flex items-center gap-1.5 font-bold text-emerald-800 text-xs">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>✓ Model Explanation & Rationale:</span>
                       </div>
-                      <p className="text-sm sm:text-base leading-relaxed text-emerald-900 whitespace-pre-line">
+                      <p className="text-xs sm:text-sm leading-relaxed text-emerald-900 whitespace-pre-line">
                         {getExplanationText()}
                       </p>
                     </div>
                   ) : (
                     // INCORRECT ANSWER TEACHING PANEL
-                    <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-amber-950 space-y-2.5 shadow-xs">
-                      <div className="flex items-center gap-2 font-bold text-amber-900 text-sm">
-                        <Award className="w-5 h-5 text-amber-600" />
+                    <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-3 text-amber-950 space-y-1 shadow-2xs">
+                      <div className="flex items-center gap-1.5 font-bold text-amber-900 text-xs">
+                        <Award className="w-4 h-4 text-amber-600 shrink-0" />
                         <span>Key Learning Takeaway & Correct Answer:</span>
                       </div>
-                      <div className="text-sm sm:text-base font-semibold text-amber-950">
+                      <div className="text-xs sm:text-sm font-semibold text-amber-950">
                         Correct Answer:{' '}
                         <span className="font-bold underline decoration-amber-500">
                           Option {String.fromCharCode(65 + (currentQuestion.correct_options[0] ?? 0))}:{' '}
                           {currentQuestion.options[currentQuestion.correct_options[0] ?? 0]}
                         </span>
                       </div>
-                      <p className="text-sm leading-relaxed text-amber-900 whitespace-pre-line">
+                      <p className="text-xs sm:text-sm leading-relaxed text-amber-900 whitespace-pre-line">
                         {getExplanationText()}
                       </p>
                     </div>
@@ -1121,10 +1135,10 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
               )}
             </div>
           ) : (
-            <div className="p-12 text-center text-slate-500 space-y-3">
-              <HelpCircle className="w-12 h-12 text-slate-300 mx-auto" />
-              <h3 className="text-lg font-bold text-slate-700">No Questions in Set</h3>
-              <p className="text-sm text-slate-500">
+            <div className="p-8 text-center text-slate-500 space-y-2">
+              <HelpCircle className="w-10 h-10 text-slate-300 mx-auto" />
+              <h3 className="text-base font-bold text-slate-700">No Questions in Set</h3>
+              <p className="text-xs text-slate-500">
                 Please add or generate questions for this question set before launching the Q&A Wheel.
               </p>
             </div>
@@ -1133,16 +1147,16 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
           {/* ================================================================ */}
           {/* BOTTOM QUESTION NAVIGATION BAR                                   */}
           {/* ================================================================ */}
-          <div className="pt-6 border-t border-slate-200 mt-6 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
+          <div className="pt-2 border-t border-slate-100 mt-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-1.5">
               {/* Previous Question Button */}
               <button
                 type="button"
                 onClick={handlePrevQuestion}
                 disabled={currentQIndex === 0}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-sm font-bold rounded-xl border border-slate-300 transition-colors flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 transition-colors flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Previous</span>
               </button>
 
@@ -1151,11 +1165,11 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
                 <button
                   type="button"
                   onClick={handleRetryQuestion}
-                  className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 text-sm font-bold rounded-xl border border-amber-300 transition-colors flex items-center gap-1.5 cursor-pointer"
+                  className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold rounded-xl border border-amber-300 transition-colors flex items-center gap-1 cursor-pointer"
                   title="Let another learner attempt this question"
                 >
-                  <RefreshCw className="w-4 h-4" />
-                  <span>Retry Question</span>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Retry</span>
                 </button>
               )}
             </div>
@@ -1165,19 +1179,19 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
               <button
                 type="button"
                 onClick={handleNextQuestion}
-                className="px-6 py-2.5 bg-[#00B0F0] hover:bg-[#0090C0] text-white text-sm sm:text-base font-extrabold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer hover:shadow-lg"
+                className="px-4 py-2 bg-[#00B0F0] hover:bg-[#0090C0] text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer hover:shadow-md"
               >
                 <span>Next Question & Spin Next Learner</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             ) : (
               <button
                 type="button"
                 onClick={onClose}
-                className="px-6 py-2.5 bg-[#1F3864] hover:bg-[#0570B0] text-white text-sm sm:text-base font-extrabold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                className="px-4 py-2 bg-[#1F3864] hover:bg-[#0570B0] text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <span>Finish Q&A Session</span>
-                <Check className="w-4 h-4" />
+                <Check className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
