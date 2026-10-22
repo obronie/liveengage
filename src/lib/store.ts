@@ -332,222 +332,280 @@ The correct SOP sequence is: (1) Halt offloading, (2) Immediately isolate damage
     title: 'Generic Standard Assessment',
     is_custom: false,
     client_name: 'Generic Standard',
-    eisa_focus_area: 'EISA Focus Area 1 & 2: Storage & Stock Preservation',
-    raw_notebook_extract: `### 1. STORAGE SOPS & STOCK PRESERVATION
-- Pallet stacking limits on open floors: Maximum 3 tiers high.
-- FIFO rotation: First In, First Out for all perishable items.
-- Cold chain: Keep frozen goods below -18C during internal transit.`,
+    eisa_focus_area: 'Focus Area 2 (Dispatch Stock - 50%)',
+    raw_notebook_extract: `### 1. DISPATCH WORKFLOW & STAGING SOPS
+- Staging Bay Demarcation: Strict order segregation to prevent cross-loading.
+- Order Picking Validation: Quality check line items against picking slip.
+- Stacking Principles: Heaviest master cartons on bottom tiers.`,
     target_level: 'operational',
     default_entry_mode: 'group',
-    total_marks: 14,
-    time_allowed_minutes: 25,
+    total_marks: 10,
+    time_allowed_minutes: 20,
     timing_mode: 'overall',
-    overall_time_minutes: 25,
+    overall_time_minutes: 20,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     questions: [
       {
-        id: 'q-stor-1',
+        id: 'q-disp-1',
         question_order: 1,
         format: 'MCQ',
-        body: 'According to South African occupational warehouse standards, what is the maximum permissible pallet stacking height on open floor staging areas without racking support?',
+        body: 'In the standard warehouse dispatch workflow, what operational step must be completed immediately prior to staging goods at the outbound loading dock?',
         additional_text: `🟢 Model Answer:
-Floor stacking limit is strictly 3 tiers high on open floors to prevent catastrophic collapse and tip-over crush hazards.
+Every picked order must undergo independent picking validation and carton count checking against the picking slip before moving into outbound staging bays.
 
 📝 How the Assessor Marks This:
-• 1 Mark for 3 tiers high.`,
-        options: ['3 tiers high', '4 tiers high', '5 tiers high', 'No limit if shrink-wrapped'],
+• 1 Mark for picking validation against picking slip.`,
+        options: [
+          'Order picking validation & quality checking against the picking slip',
+          'Immediate loading into the delivery vehicle without checking',
+          'Discarding all picked order paperwork into recycling',
+          'Changing carton quantities to match whatever fits on the truck'
+        ],
         correct_options: [0],
         duration: 45,
         marks: 1,
-        guide_topic_hint: 'Pallet Stacking Standards'
+        guide_topic_hint: 'Cluster 2.1 • Dispatch Workflow Sequence'
       },
       {
-        id: 'q-stor-2',
+        id: 'q-disp-2',
         question_order: 2,
         format: 'MCQ',
-        body: 'What is the primary operational objective of the First-In, First-Out (FIFO) stock rotation system in warehouse storage management?',
+        body: 'When staging customer orders in dispatch marshalling bays, why must orders be strictly segregated into clearly demarcated floor bays?',
         additional_text: `🟢 Model Answer:
-FIFO guarantees that the oldest inventory received is picked and dispatched first, directly preventing product expiration, stock obsolescence, and packaging deterioration.
+Clear bay demarcation prevents order cross-contamination, eliminates mixed destination loads, and stops cartons belonging to Customer A being erroneously loaded on Customer B truck.
 
 📝 How the Assessor Marks This:
-• 1 Mark for identifying dispatching oldest inventory first.`,
+• 1 Mark for preventing cross-contamination and misrouting.`,
         options: [
-          'Ensuring the oldest received inventory is dispatched first to prevent obsolescence and expiry',
-          'Dispatching the newest stock first to satisfy customer preferences',
-          'Stacking heavier pallets on top of lighter pallets',
-          'Grouping stock by supplier brand rather than receipt date'
+          'To prevent cross-contamination of customer orders and incorrect vehicle loading',
+          'To allow forklift operators to drive at maximum speed without stopping',
+          'To hide damaged stock from customer transport drivers',
+          'Because floor paint improves warehouse aesthetic lighting'
         ],
         correct_options: [0],
         duration: 45,
         marks: 1,
-        guide_topic_hint: 'FIFO Stock Rotation Protocols'
+        guide_topic_hint: 'Cluster 2.1 • Staging Bay Segregation'
       },
       {
-        id: 'q-stor-3',
+        id: 'q-disp-3',
         question_order: 3,
-        format: 'MCQ',
-        body: 'During internal warehouse transfer between blast freezers and cold storage staging bays, frozen food inventory must remain below what statutory temperature threshold?',
-        additional_text: `🟢 Model Answer:
-Frozen perishables must strictly remain at or below -18°C throughout all warehouse movements. Any thaw temperature above -12°C triggers quarantine inspection.
-
-📝 How the Assessor Marks This:
-• 1 Mark for -18°C temperature standard.`,
-        options: [
-          '-18°C or colder at all times',
-          '0°C to +4°C',
-          '-5°C to -10°C',
-          '+5°C for up to 4 hours'
-        ],
-        correct_options: [0],
-        duration: 30,
-        marks: 1,
-        guide_topic_hint: 'Frozen Cold Chain Integrity'
-      },
-      {
-        id: 'q-stor-4',
-        question_order: 4,
-        format: 'MCQ',
-        body: 'What is the maximum permissible carton overhang beyond the perimeter edge of a standard 1,000mm x 1,200mm timber wooden pallet?',
-        additional_text: `🟢 Model Answer:
-Zero overhang is the strict warehouse ideal. Maximum allowable tolerance is 25mm under strict supervision. Any greater overhang reduces carton corner stacking strength by up to 32% and creates racking snagging hazards.
-
-📝 How the Assessor Marks This:
-• 2 Marks for identifying zero overhang ideal (max 25mm) and explaining carton crush risk.`,
-        options: [
-          'Zero overhang is preferred; maximum 25mm to prevent carton corner crushing and racking snagging',
-          'Up to 150mm if secured with plastic strapping',
-          'No limit if cartons are wrapped with black pallet stretch film',
-          'Half the width of the bottom carton'
-        ],
-        correct_options: [0],
-        duration: 45,
-        marks: 2,
-        guide_topic_hint: 'Pallet Stacking & Overhang Standards'
-      },
-      {
-        id: 'q-stor-5',
-        question_order: 5,
-        format: 'MCQ',
-        body: 'What is the minimum required vertical clearance between top pallet loads on high-bay racking beams and warehouse ceiling fire sprinkler heads?',
-        additional_text: `🟢 Model Answer:
-Statutory fire safety standards (ASIB / SANS) mandate a minimum 500mm (0.5 meter) clear perimeter below fire sprinkler deflectors to guarantee unobstructed water distribution in fire emergencies.
-
-📝 How the Assessor Marks This:
-• 1 Mark for 500mm / 0.5m clearance standard.`,
-        options: [
-          'Minimum 500mm (0.5 meters) clear unobstructed perimeter',
-          'Minimum 100mm clearance',
-          'Sprinkler heads may touch top shrink-wrap',
-          'Clearance is only required for ground-level goods'
-        ],
-        correct_options: [0],
-        duration: 45,
-        marks: 1,
-        guide_topic_hint: 'Fire Sprinkler Clearance Standards'
-      },
-      {
-        id: 'q-stor-6',
-        question_order: 6,
         format: 'MULTIPLE',
-        body: 'When storing flammable aerosol spray cans and industrial solvent thinners in the warehouse, which safety controls are legally mandatory? (Select all that apply)',
+        body: 'Which critical data fields on a picking slip must the picker verify before passing the order to the packing table? (Select all that apply)',
         additional_text: `🟢 Model Answer:
-Flammables require: (1) Approved heavy-gauge steel safety cabinet with self-closing doors, (2) Bunded containment sump to capture spills, (3) Flameproof explosion-proof electrical fittings nearby, and (4) Proximity to dedicated dry powder fire extinguishers. Never store near food or exit aisles.
+The picker must verify SKU code, quantity picked, batch/lot number, and destination customer/branch code against the order line items.
 
 📝 How the Assessor Marks This:
-• 1 Mark for designated steel cabinet and bunding.
-• 1 Mark for fire suppression proximity and food segregation.`,
+• 1 Mark for SKU code, picked quantity, batch number, and destination code.`,
         options: [
-          'Heavy-gauge steel flammable liquid safety cabinet with self-closing doors',
-          'Secondary leak containment sump or bunding in cabinet base',
-          'Dedicated dry chemical powder fire extinguisher within 5 meters',
-          'Open shelf storage directly above retail dry food provisions'
+          'Item SKU code and description',
+          'Quantity picked matching requested units',
+          'Batch / Lot / Expiry number for regulated stock',
+          'Destination customer or branch delivery code'
         ],
-        correct_options: [0, 1, 2],
+        correct_options: [0, 1, 2, 3],
         duration: 60,
         marks: 2,
-        guide_topic_hint: 'Flammable Goods Storage Controls'
+        guide_topic_hint: 'Cluster 2.1 • Picking Slip Validation'
       },
       {
-        id: 'q-stor-7',
-        question_order: 7,
-        format: 'MCQ',
-        body: 'What is the minimum designated clear width required for pedestrian safety walkways inside high-traffic warehouse storage aisles shared with forklifts?',
-        additional_text: `🟢 Model Answer:
-Occupational health and safety guidelines mandate a minimum 1.2-meter wide clear pedestrian walking corridor, demarcated with high-visibility yellow floor paint lines.
-
-📝 How the Assessor Marks This:
-• 1 Mark for 1.2m pedestrian demarcation standard.`,
-        options: [
-          '1.2 meters clear width, demarcated with high-visibility floor paint',
-          '0.5 meters wide',
-          'No walkway is required if employees wear reflective vests',
-          '3.5 meters wide'
-        ],
-        correct_options: [0],
-        duration: 45,
-        marks: 1,
-        guide_topic_hint: 'Aisle Housekeeping & Pedestrian Safety'
-      },
-      {
-        id: 'q-stor-8',
-        question_order: 8,
+        id: 'q-disp-4',
+        question_order: 4,
         format: 'BINARY',
-        body: 'True or False: A damaged wooden pallet with cracked bottom deckboards or protruding nails may be placed on upper high-bay racking beams if the pallet load is shrink-wrapped tightly.',
+        body: 'True or False: Outbound orders may be temporarily staged directly in front of emergency fire escape doors if the collection vehicle is expected to arrive within 15 minutes.',
         additional_text: `🟢 Model Answer:
-False! Structural pallet defects (broken deckboards, split stringers, loose nails) compromise load distribution across racking beam flanges, creating severe racking collapse and falling pallet risks. Damaged pallets must be repalletized immediately.
+False. Statutory OHS regulations strictly prohibit blocking fire escape doors, emergency routes, or fire hose reels at ANY time, regardless of how soon a truck will arrive.
 
 📝 How the Assessor Marks This:
-• 1 Mark for identifying False and explaining racking collapse hazard.`,
+• 1 Mark for False and citing statutory emergency exit clearance.`,
         options: ['True', 'False'],
         correct_options: [1],
         duration: 30,
         marks: 1,
-        guide_topic_hint: 'Pallet Structural Integrity'
+        guide_topic_hint: 'Cluster 2.1 • Dispatch Staging Clearances'
       },
       {
-        id: 'q-stor-9',
-        question_order: 9,
+        id: 'q-disp-5',
+        question_order: 5,
         format: 'MCQ',
-        body: 'Under standard perpetual inventory counting procedures, how frequently should fast-moving Class A high-value warehouse stock undergo cycle counting?',
+        body: 'If an order picker discovers that a designated picking bin contains fewer items than requested on the picking slip, what is the immediate required protocol?',
         additional_text: `🟢 Model Answer:
-Class A items (high value, high velocity) must be cycle counted weekly or monthly on a perpetual cycle count schedule. Waiting for annual financial stocktake allows undiscovered shrinkage and variance accumulation.
+The picker must report the shortage immediately to the inventory controller / supervisor, endorse the shortage on the picking slip, and never pull random stock from unallocated bins without authorization.
 
 📝 How the Assessor Marks This:
-• 1 Mark for weekly / monthly perpetual frequency.
-• 1 Mark for contrasting with annual stocktake delays.`,
+• 1 Mark for reporting shortage and stopping unauthorized picking.`,
         options: [
-          'Weekly or monthly perpetual cycle counts',
-          'Only once every 3 years',
-          'Only during annual financial year-end stocktake',
-          'Whenever a customer files an order shortage complaint'
+          'Report stock shortage to supervisor, endorse picking slip, and do not pick from unallocated bins',
+          'Take similar items from an adjacent aisle without recording',
+          'Mark the order as complete and let the customer discover the shortage',
+          'Cancel the entire customer order without notifying anyone'
+        ],
+        correct_options: [0],
+        duration: 45,
+        marks: 1,
+        guide_topic_hint: 'Cluster 2.1 • Order Picking Discrepancies'
+      },
+      {
+        id: 'q-disp-6',
+        question_order: 6,
+        format: 'MCQ',
+        body: 'When consolidating multi-item orders onto outbound dispatch pallets, which stacking principle must always be followed?',
+        additional_text: `🟢 Model Answer:
+Heavier, rigid master cartons must be placed on the bottom tiers, with progressively lighter and smaller packages stacked above to prevent crushing and load instability.
+
+📝 How the Assessor Marks This:
+• 1 Mark for heaviest cartons on bottom tiers.`,
+        options: [
+          'Heaviest, most rigid cartons on the bottom tiers; lighter items on top',
+          'Lightest and most fragile items on the bottom to support the load',
+          'Random order based purely on which items were picked first',
+          'Pyramid stacking with heavy items balanced on top corners'
+        ],
+        correct_options: [0],
+        duration: 45,
+        marks: 1,
+        guide_topic_hint: 'Cluster 2.1 • Pallet Staging & Consolidation'
+      }
+    ]
+  },
+  {
+    id: 'set-generic-2-2',
+    cluster_id: 'cluster-2-2',
+    set_number: 1,
+    title: 'Generic Standard Assessment',
+    is_custom: false,
+    client_name: 'Generic Standard',
+    eisa_focus_area: 'Focus Area 2 (Dispatch Advice & MHE Selection)',
+    raw_notebook_extract: `### 1. RECORDING DISPATCHES & MHE SOPS
+- 3-step Faulty Equipment Protocol: STOP, TAG OUT, REPORT.
+- MHE Selection: Counterbalance forklift for ground vehicle loading, reach truck for high bays.
+- Driver Verification: Full name, legible signature, date, and vehicle registration.`,
+    target_level: 'operational',
+    default_entry_mode: 'group',
+    total_marks: 11,
+    time_allowed_minutes: 20,
+    timing_mode: 'overall',
+    overall_time_minutes: 20,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    questions: [
+      {
+        id: 'q-rec-22-1',
+        question_order: 1,
+        format: 'MCQ',
+        body: 'While operating an electric pallet jack in the dispatch staging bay, the operator notices hydraulic fluid weeping from the lift cylinder. What is the mandatory 3-step Faulty Equipment Protocol?',
+        additional_text: `🟢 Model Answer:
+The standard 3-step protocol is: (1) STOP operating the equipment immediately, (2) TAG OUT the equipment with a high-visibility Out-of-Service tag and remove keys, and (3) REPORT the fault in writing to the dispatch supervisor / workshop.
+
+📝 How the Assessor Marks This:
+• 2 Marks for stating STOP, TAG OUT, and REPORT in sequence.`,
+        options: [
+          'STOP operation immediately, TAG OUT equipment with Out-of-Service tag, and REPORT to supervisor',
+          'Wipe the oil with a rag and continue driving until shift end',
+          'Park the equipment in an empty aisle and leave it for the next shift',
+          'Top up the cylinder with motor oil without logging a fault'
         ],
         correct_options: [0],
         duration: 45,
         marks: 2,
-        guide_topic_hint: 'Cycle Counting & Stock Preservation'
+        guide_topic_hint: 'Cluster 2.2 • 3-Step Faulty Equipment Protocol'
       },
       {
-        id: 'q-stor-10',
-        question_order: 10,
+        id: 'q-rec-22-2',
+        question_order: 2,
         format: 'MCQ',
-        body: 'While conducting morning warehouse aisle inspections, you discover rodent droppings and chewed cardboard corners on pallet #84 in storage aisle 4. What is the mandatory immediate operational action?',
+        body: 'Which Material Handling Equipment (MHE) is most appropriate for safely loading pallets onto a curtain-side line-haul road freight trailer from ground level?',
         additional_text: `🟢 Model Answer:
-The clerk must immediately: (1) Place the entire pallet in the designated Quarantine Bay, (2) Affix high-visibility 'QUARANTINE - DO NOT MOVE' tags, (3) Notify the warehouse supervisor and approved pest control contractor, and (4) Initiate a stock loss / write-off assessment. Contaminated goods must never be dispatched to customers!
+A Counterbalance Forklift equipped with certified fork tines and rated load capacity is standard for outdoor ground-level vehicle loading.
 
 📝 How the Assessor Marks This:
-• 1 Mark for immediate quarantine and isolation.
-• 1 Mark for reporting to pest control and preventing customer dispatch.`,
+• 1 Mark for Counterbalance Forklift.`,
         options: [
-          'Move the pallet immediately to Quarantine Bay, attach Quarantine tags, and report to pest control & supervisor',
-          'Brush off the droppings with a broom and pick goods for orders as usual',
-          'Move the pallet to the dispatch bay so customers receive it before further damage occurs',
-          'Spray household insect insecticide directly onto the food packaging'
+          'Counterbalance Forklift with certified fork tines',
+          'Manual 2-wheel hand sack barrow',
+          'Narrow-aisle turret truck',
+          'High-reach order picker platform'
         ],
         correct_options: [0],
         duration: 45,
+        marks: 1,
+        guide_topic_hint: 'Cluster 2.2 • MHE Selection Standards'
+      },
+      {
+        id: 'q-rec-22-3',
+        question_order: 3,
+        format: 'MCQ',
+        body: 'Before releasing an outbound delivery vehicle from the dispatch bay, what documentation must the collecting carrier driver sign and date in legible handwriting?',
+        additional_text: `🟢 Model Answer:
+The driver must physically verify carton/pallet count and sign, date, print their full legal name, and record their vehicle registration number on the official Dispatch Advice / Proof of Delivery (POD).
+
+📝 How the Assessor Marks This:
+• 1 Mark for Dispatch Advice / POD signed with name and vehicle registration.`,
+        options: [
+          'Official Dispatch Advice / Delivery Note with driver name and vehicle registration',
+          'Warehouse visitor register badge only',
+          'ERP picking slip copy without driver details',
+          'Driver personal delivery logbook only'
+        ],
+        correct_options: [0],
+        duration: 45,
+        marks: 1,
+        guide_topic_hint: 'Cluster 2.2 • Driver Handover & Dispatch Register'
+      },
+      {
+        id: 'q-rec-22-4',
+        question_order: 4,
+        format: 'BINARY',
+        body: 'True or False: An MHE operator whose forklift driver certification expired last week may continue driving during peak dispatch periods if authorized verbally by a peer.',
+        additional_text: `🟢 Model Answer:
+False. Driving mechanical equipment without valid statutory accreditation contravenes the Driven Machinery Regulations (OHS Act) and invalidates warehouse insurance.
+
+📝 How the Assessor Marks This:
+• 1 Mark for False and citing statutory licensing compliance.`,
+        options: ['True', 'False'],
+        correct_options: [1],
+        duration: 30,
+        marks: 1,
+        guide_topic_hint: 'Cluster 2.2 • MHE Operator Licensing Compliance'
+      },
+      {
+        id: 'q-rec-22-5',
+        question_order: 5,
+        format: 'CLOZE',
+        body: 'According to the Dispatch Documentation & Handover Sequence, the official Dispatch Advice must record the driver details. The driver must then provide their full name, legible [1], date, and vehicle [2] on the dispatch register.',
+        additional_text: `🟢 Model Answer:
+Gap 1: signature; Gap 2: registration.
+Handover sequence mandates full legal driver signature and vehicle registration before gate pass issuance.
+
+📝 How the Assessor Marks This:
+• 1 Mark per correct gap assignment.`,
+        options: ['signature', 'registration', 'fingerprint', 'invoice'],
+        correct_options: [0, 1],
+        duration: 60,
         marks: 2,
-        guide_topic_hint: 'Quarantine & Pest Contamination Protocols'
+        guide_topic_hint: 'Cluster 2.2 • Dispatch Register Sign-Off'
+      },
+      {
+        id: 'q-rec-22-6',
+        question_order: 6,
+        format: 'MULTIPLE',
+        body: 'Which documents must be matched and reconciled in the dispatch office before confirming electronic shipment departure in the ERP system? (Select all that apply)',
+        additional_text: `🟢 Model Answer:
+The dispatch clerk must reconcile: (1) Sales Order, (2) Signed Picking Slip, and (3) Carrier-signed Dispatch Advice / POD.
+
+📝 How the Assessor Marks This:
+• 1 Mark for Sales Order, Picking Slip, and signed Dispatch Advice.`,
+        options: [
+          'Sales Order reference and customer line items',
+          'Completed and signed Order Picking Slip',
+          'Dispatch Advice / POD signed by collecting carrier driver',
+          'Supplier inbound credit note from previous week'
+        ],
+        correct_options: [0, 1, 2],
+        duration: 60,
+        marks: 2,
+        guide_topic_hint: 'Cluster 2.2 • Dispatch Documentation Matching'
       }
     ]
   },
@@ -558,7 +616,7 @@ The clerk must immediately: (1) Place the entire pallet in the designated Quaran
     title: 'Generic Standard Assessment',
     is_custom: false,
     client_name: 'Generic Standard',
-    eisa_focus_area: 'EISA Focus Area 1: Receiving & Loss Prevention',
+    eisa_focus_area: 'Underpinning Health, Safety & Housekeeping',
     raw_notebook_extract: `### 1. LEARNER GUIDE CORE CONCEPTS & SOPS
 - Aisle & Distribution Board Clearance: Minimum 1.2m perimeter unobstructed at all times.
 - Pallet Stacking: Maximum 3 tiers on open floors.
@@ -581,30 +639,34 @@ The clerk must immediately: (1) Place the entire pallet in the designated Quaran
         id: 'q-gen-1',
         question_order: 1,
         format: 'MCQ',
-        body: 'Order #409 requests 120 cartons of chilled beef. The supplier delivers 110 cartons with 2 cartons leaking. The delivery note states 120 cartons. What is the variance and what document must you immediately endorse?',
-        additional_text: 'EISA Assessment Standard 1.1: Physical shortage (-10) plus damaged stock (-2) equals -12 cartons total variance. The receiving clerk must endorse the supplier Delivery Note before the driver departs and issue a Discrepancy Note.',
+        body: 'Which fire extinguisher type is strictly prohibited for use on an energized electrical distribution board fire inside the warehouse?',
+        additional_text: `🟢 Model Answer:
+Water / Hydrant fire extinguishers conduct electricity back through the stream, causing fatal electrocution. Only Class C / CO2 or Dry Chemical Powder extinguishers are safe for electrical fires.
+
+📝 How the Assessor Marks This:
+• 1 Mark for Water / Hydrant extinguisher prohibition.`,
         options: [
-          '-12 cartons; endorse Delivery Note & issue Discrepancy Note',
-          '+10 cartons; sign delivery note as accepted',
-          '-10 cartons; notify manager verbally without signing',
-          '0 variance; accept total and adjust inventory tomorrow'
+          'Water / Hydrant Extinguisher (causes fatal electrocution)',
+          'Carbon Dioxide (CO2) Extinguisher',
+          'Dry Chemical Powder (DCP) Extinguisher',
+          'Fire Suppression Blanket'
         ],
         correct_options: [0],
         duration: 45,
         marks: 1,
-        guide_topic_hint: 'EISA Focus Area 1: Receiving Variance Checks'
+        guide_topic_hint: 'Cluster 2.4 • Warehouse Fire Safety'
       },
       {
         id: 'q-gen-2',
         question_order: 2,
         format: 'MCQ',
         body: 'According to your Learner Guide, what is the minimum required clearance perimeter that must remain unobstructed around electrical distribution boards and emergency exit paths?',
-        additional_text: 'Learner Guide Section 2.1 mandates a minimum 1.2-meter clear perimeter at all times to ensure unhindered emergency egress and rapid fire department access. Door swing alone (0.8m) is not sufficient.',
+        additional_text: 'Learner Guide Section 2.4 mandates a minimum 1.2-meter clear perimeter at all times to ensure unhindered emergency egress and rapid fire department access. Door swing alone (0.8m) is not sufficient.',
         options: ['0.5 meters', '1.2 meters', '2.5 meters', 'Only clearance for the door swing'],
         correct_options: [1],
         duration: 45,
         marks: 1,
-        guide_topic_hint: 'Section 2.1 - Core Workplace Housekeeping Duties'
+        guide_topic_hint: 'Cluster 2.4 • Electrical Panel Clearances'
       },
       {
         id: 'q-gen-3',
@@ -621,7 +683,7 @@ The clerk must immediately: (1) Place the entire pallet in the designated Quaran
         correct_options: [0, 1, 2],
         duration: 60,
         marks: 1,
-        guide_topic_hint: 'EISA Criterion 1.2: Stock Characteristics & Hazchem'
+        guide_topic_hint: 'Cluster 2.4 • Chemical Bunding & PPE'
       },
       {
         id: 'q-gen-4',
@@ -633,7 +695,7 @@ The clerk must immediately: (1) Place the entire pallet in the designated Quaran
         correct_options: [1],
         duration: 30,
         marks: 1,
-        guide_topic_hint: 'Pallet Stacking Limits'
+        guide_topic_hint: 'Cluster 2.4 • Pallet Stacking Limits'
       },
       {
         id: 'q-gen-5',

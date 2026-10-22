@@ -329,6 +329,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
   // Question Answer State
   const [isRevealed, setIsRevealed] = useState<boolean>(false);
   const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
+  const [selectedOptionIndices, setSelectedOptionIndices] = useState<number[]>([]);
   const [showCelebration, setShowCelebration] = useState<boolean>(false);
 
   // Wheel Animation State
@@ -340,7 +341,11 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
   const lastPegPassedRef = useRef<number>(-1);
   const animFrameIdRef = useRef<number | null>(null);
 
-  const questions: Question[] = set.questions || [];
+  // Filter out open-ended WORD_CLOUD questions from the live Q&A wheel
+  const questions: Question[] = useMemo(
+    () => (set.questions || []).filter((q) => q.format !== 'WORD_CLOUD'),
+    [set.questions]
+  );
   const currentQuestion: Question | undefined = questions[currentQIndex];
   const totalQuestions = questions.length;
 
@@ -665,17 +670,26 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
   // ==========================================================================
   // Option Click & Answer Evaluation
   // ==========================================================================
-  const handleSelectOption = (optIndex: number) => {
-    if (isRevealed || !currentQuestion) return;
+  const isMultiSelectFormat =
+    currentQuestion?.format === 'MULTIPLE' || currentQuestion?.format === 'CLOZE';
 
-    setSelectedOptionIndex(optIndex);
+  const evaluateSubmission = (chosenIndices: number[]) => {
+    if (!currentQuestion) return;
     setIsRevealed(true);
 
-    const isCorrect = currentQuestion.correct_options.includes(optIndex);
+    const correctList = currentQuestion.correct_options || [];
+    const isMulti = currentQuestion.format === 'MULTIPLE' || currentQuestion.format === 'CLOZE';
+
+    // Fully correct if every correct option was selected and zero incorrect options were chosen
+    const isFullyCorrect = isMulti
+      ? correctList.length > 0 &&
+        correctList.length === chosenIndices.length &&
+        correctList.every((idx) => chosenIndices.includes(idx))
+      : correctList.includes(chosenIndices[0] ?? -1);
 
     // Update score
     setScore((prev) => ({
-      correct: prev.correct + (isCorrect ? 1 : 0),
+      correct: prev.correct + (isFullyCorrect ? 1 : 0),
       answered: prev.answered + 1,
     }));
 
@@ -685,12 +699,36 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       setPickedLearners((prev) => [selectedLearner, ...prev.filter((n) => n !== selectedLearner)]);
     }
 
-    if (isCorrect) {
+    if (isFullyCorrect) {
       if (soundEnabled) audioSynthesizer.playFanfare();
       setShowCelebration(true);
     } else {
       if (soundEnabled) audioSynthesizer.playIncorrect();
     }
+  };
+
+  const handleSelectOption = (optIndex: number) => {
+    if (isRevealed || !currentQuestion) return;
+
+    if (isMultiSelectFormat) {
+      // Toggle selection in selectedOptionIndices without auto-revealing
+      setSelectedOptionIndices((prev) =>
+        prev.includes(optIndex)
+          ? prev.filter((i) => i !== optIndex)
+          : [...prev, optIndex]
+      );
+      return;
+    }
+
+    // Single-choice formats (MCQ, BINARY, SCALE): click to reveal immediately
+    setSelectedOptionIndex(optIndex);
+    setSelectedOptionIndices([optIndex]);
+    evaluateSubmission([optIndex]);
+  };
+
+  const handleSubmitMultiAnswer = () => {
+    if (isRevealed || !currentQuestion || selectedOptionIndices.length === 0) return;
+    evaluateSubmission(selectedOptionIndices);
   };
 
   // ==========================================================================
@@ -701,6 +739,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       setCurrentQIndex((prev) => prev + 1);
       setIsRevealed(false);
       setSelectedOptionIndex(null);
+      setSelectedOptionIndices([]);
       setShowCelebration(false);
       setSelectedLearner(null);
       // Auto-spin for the next learner immediately!
@@ -715,6 +754,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       setCurrentQIndex((prev) => prev - 1);
       setIsRevealed(false);
       setSelectedOptionIndex(null);
+      setSelectedOptionIndices([]);
       setShowCelebration(false);
     }
   }, [currentQIndex]);
@@ -722,6 +762,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
   const handleRetryQuestion = () => {
     setIsRevealed(false);
     setSelectedOptionIndex(null);
+    setSelectedOptionIndices([]);
     setShowCelebration(false);
   };
 
@@ -1136,156 +1177,188 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
         {/* ================================================================== */}
         {/* RIGHT COLUMN: Interactive Question & Answer Stage (60%: 3 Columns)  */}
         {/* ================================================================== */}
-        <section className="lg:col-span-3 bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 flex flex-col justify-between shadow-xs min-h-0 overflow-y-auto">
+        <section className="lg:col-span-3 bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 flex flex-col min-h-0 shadow-xs h-full">
           
           {currentQuestion ? (
-            <div className="space-y-2.5 flex-1 min-h-0 flex flex-col justify-between">
-              <div>
-                {/* Question Header & Badges (Marks badge removed for clean classroom viewing) */}
-                <div className="space-y-1.5 pb-2 border-b border-slate-100">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#1F3864] text-white">
-                      Question {currentQIndex + 1} of {totalQuestions}
+            /* Scrollable Question Content (Header + Stem + Options + Revealed Explanation) */
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1 sm:pr-2 space-y-3 pb-2">
+              {/* Question Header & Badges */}
+              <div className="space-y-1.5 pb-2 border-b border-slate-100">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#1F3864] text-white">
+                    Question {currentQIndex + 1} of {totalQuestions}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700">
+                    {currentQuestion.format || 'MCQ'}
+                  </span>
+                  {isMultiSelectFormat && (
+                    <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                      Multi-Select: Choose {currentQuestion.correct_options?.length || 'all matching'} options
                     </span>
-                    <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700">
-                      {currentQuestion.format || 'MCQ'}
+                  )}
+                  {currentQuestion.guide_topic_hint && (
+                    <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-sky-50 text-[#00B0F0] border border-sky-100 truncate max-w-xs">
+                      📖 {currentQuestion.guide_topic_hint}
                     </span>
-                    {currentQuestion.guide_topic_hint && (
-                      <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-sky-50 text-[#00B0F0] border border-sky-100 truncate max-w-xs">
-                        📖 {currentQuestion.guide_topic_hint}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* High-Contrast Question Stem with CLOZE Bracketed Underline Support */}
-                  {renderQuestionStem(currentQuestion.body, isRevealed, currentQuestion, fontSizeClasses.stem)}
-                </div>
-
-                {/* CLOZE Word Bank Prompt Banner */}
-                {currentQuestion.format === 'CLOZE' && (
-                  <div className="mt-2.5 px-3 py-1.5 rounded-xl bg-sky-50 border border-sky-200 text-[#00B0F0] flex items-center gap-1.5 text-xs font-bold">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Word Bank — Select the correct term to complete the passage:</span>
-                  </div>
-                )}
-
-                {/* Interactive Options Cards */}
-                <div className="space-y-2 mt-2.5">
-                  {currentQuestion.options && currentQuestion.options.length > 0 ? (
-                    currentQuestion.options.map((opt, idx) => {
-                      const letter = String.fromCharCode(65 + idx); // A, B, C, D...
-                      const isSelected = selectedOptionIndex === idx;
-                      const isCorrect = currentQuestion.correct_options.includes(idx);
-
-                      // Dynamic styling based on answer state
-                      let cardStyle = 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800 hover:border-[#00B0F0]/50';
-                      let letterStyle = 'bg-slate-100 text-[#1F3864]';
-                      let badge = null;
-
-                      if (isRevealed) {
-                        if (isSelected && isCorrect) {
-                          cardStyle = 'bg-emerald-50 border-emerald-500 text-emerald-950 shadow-xs ring-1 ring-emerald-300';
-                          letterStyle = 'bg-emerald-600 text-white';
-                          badge = (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-600 text-white">
-                              <Check className="w-3 h-3" />
-                              CORRECT!
-                            </span>
-                          );
-                        } else if (isSelected && !isCorrect) {
-                          cardStyle = 'bg-rose-50 border-rose-500 text-rose-950';
-                          letterStyle = 'bg-rose-600 text-white';
-                          badge = (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-rose-600 text-white">
-                              <X className="w-3 h-3" />
-                              Incorrect
-                            </span>
-                          );
-                        } else if (isCorrect) {
-                          cardStyle = 'bg-emerald-50 border-emerald-500 text-emerald-950 ring-1 ring-emerald-400';
-                          letterStyle = 'bg-emerald-600 text-white';
-                          badge = (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-600 text-white">
-                              <Check className="w-3 h-3" />
-                              Correct Answer
-                            </span>
-                          );
-                        } else {
-                          cardStyle = 'bg-slate-50 border-slate-200 text-slate-400 opacity-60';
-                          letterStyle = 'bg-slate-200 text-slate-500';
-                        }
-                      }
-
-                      return (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => handleSelectOption(idx)}
-                          disabled={isRevealed}
-                          className={`w-full ${fontSizeClasses.optionPadding} rounded-xl border-2 text-left transition-all flex items-start gap-3 cursor-pointer disabled:cursor-default ${cardStyle}`}
-                        >
-                          <div className={`${fontSizeClasses.optionLetter} rounded-lg font-bold flex items-center justify-center shrink-0 ${letterStyle}`}>
-                            {letter}
-                          </div>
-                          <div className="flex-1 min-w-0 pt-0.5">
-                            <p className={`${fontSizeClasses.options} font-medium leading-normal`}>
-                              {opt}
-                            </p>
-                          </div>
-                          {badge && <div className="shrink-0 pt-0.5">{badge}</div>}
-                        </button>
-                      );
-                    })
-                  ) : (
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                      <p className="text-xs text-slate-600 font-medium">
-                        This question requires an open learner response or discussion.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setIsRevealed(true)}
-                        className="px-3.5 py-1.5 bg-[#00B0F0] text-white font-bold rounded-lg text-xs"
-                      >
-                        Reveal Model Answer & Rationale
-                      </button>
-                    </div>
                   )}
                 </div>
+
+                {/* High-Contrast Question Stem with CLOZE Bracketed Underline Support */}
+                {renderQuestionStem(currentQuestion.body, isRevealed, currentQuestion, fontSizeClasses.stem)}
               </div>
 
-              {/* Revealed Teaching & Explanation Panels (Points awarded rubric removed) */}
+              {/* CLOZE Word Bank Prompt Banner */}
+              {currentQuestion.format === 'CLOZE' && (
+                <div className="mt-2.5 px-3 py-1.5 rounded-xl bg-sky-50 border border-sky-200 text-[#00B0F0] flex items-center gap-1.5 text-xs font-bold">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Word Bank — Select the correct terms to complete the passage:</span>
+                </div>
+              )}
+
+              {/* Interactive Options Cards */}
+              <div className="space-y-2 mt-2.5">
+                {currentQuestion.options && currentQuestion.options.length > 0 ? (
+                  currentQuestion.options.map((opt, idx) => {
+                    const letter = String.fromCharCode(65 + idx); // A, B, C, D...
+                    const isSelected = isMultiSelectFormat
+                      ? selectedOptionIndices.includes(idx)
+                      : selectedOptionIndex === idx;
+                    const isCorrect = currentQuestion.correct_options.includes(idx);
+
+                    // Dynamic styling based on answer state
+                    let cardStyle = 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800 hover:border-[#00B0F0]/50';
+                    let letterStyle = 'bg-slate-100 text-[#1F3864]';
+                    let badge = null;
+
+                    if (!isRevealed) {
+                      if (isSelected) {
+                        cardStyle = 'bg-sky-50 border-[#00B0F0] text-[#1F3864] ring-2 ring-[#00B0F0]/40 shadow-xs';
+                        letterStyle = 'bg-[#00B0F0] text-white';
+                        badge = (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#00B0F0] text-white">
+                            <Check className="w-3 h-3" />
+                            Selected
+                          </span>
+                        );
+                      }
+                    } else {
+                      if (isSelected && isCorrect) {
+                        cardStyle = 'bg-emerald-50 border-emerald-500 text-emerald-950 shadow-xs ring-1 ring-emerald-300';
+                        letterStyle = 'bg-emerald-600 text-white';
+                        badge = (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-600 text-white">
+                            <Check className="w-3 h-3" />
+                            CORRECT!
+                          </span>
+                        );
+                      } else if (isSelected && !isCorrect) {
+                        cardStyle = 'bg-rose-50 border-rose-500 text-rose-950';
+                        letterStyle = 'bg-rose-600 text-white';
+                        badge = (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-rose-600 text-white">
+                            <X className="w-3 h-3" />
+                            Incorrect
+                          </span>
+                        );
+                      } else if (isCorrect) {
+                        cardStyle = 'bg-emerald-50/70 border-emerald-400 text-emerald-950 ring-1 ring-emerald-300';
+                        letterStyle = 'bg-emerald-600 text-white';
+                        badge = (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-600 text-white">
+                            <Check className="w-3 h-3" />
+                            {isMultiSelectFormat ? 'Missed Answer' : 'Correct Answer'}
+                          </span>
+                        );
+                      } else {
+                        cardStyle = 'bg-slate-50 border-slate-200 text-slate-400 opacity-60';
+                        letterStyle = 'bg-slate-200 text-slate-500';
+                      }
+                    }
+
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => handleSelectOption(idx)}
+                        disabled={isRevealed}
+                        className={`w-full ${fontSizeClasses.optionPadding} rounded-xl border-2 text-left transition-all flex items-start gap-3 cursor-pointer disabled:cursor-default ${cardStyle}`}
+                      >
+                        <div className={`${fontSizeClasses.optionLetter} rounded-lg font-bold flex items-center justify-center shrink-0 ${letterStyle}`}>
+                          {letter}
+                        </div>
+                        <div className="flex-1 min-w-0 pt-0.5">
+                          <p className={`${fontSizeClasses.options} font-medium leading-normal`}>
+                            {opt}
+                          </p>
+                        </div>
+                        {badge && <div className="shrink-0 pt-0.5">{badge}</div>}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <p className="text-xs text-slate-600 font-medium">
+                      This question requires an open learner response or discussion.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setIsRevealed(true)}
+                      className="px-3.5 py-1.5 bg-[#00B0F0] text-white font-bold rounded-lg text-xs"
+                    >
+                      Reveal Model Answer & Rationale
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Revealed Teaching & Explanation Panels */}
               {isRevealed && (
-                <div className="pt-1 animate-fadeIn">
-                  {selectedOptionIndex !== null && currentQuestion.correct_options.includes(selectedOptionIndex) ? (
-                    // CORRECT ANSWER CELEBRATORY PANEL
-                    <div className="bg-emerald-50/90 border border-emerald-300 rounded-xl p-3 text-emerald-950 space-y-1 shadow-2xs">
-                      <div className="flex items-center gap-1.5 font-bold text-emerald-800 text-xs">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>✓ Model Explanation & Rationale:</span>
+                <div className="pt-2 animate-fadeIn">
+                  {(() => {
+                    const correctList = currentQuestion.correct_options || [];
+                    const isFullyCorrect = isMultiSelectFormat
+                      ? correctList.length > 0 &&
+                        correctList.length === selectedOptionIndices.length &&
+                        correctList.every((idx) => selectedOptionIndices.includes(idx))
+                      : selectedOptionIndex !== null && correctList.includes(selectedOptionIndex);
+
+                    if (isFullyCorrect) {
+                      return (
+                        <div className="bg-emerald-50/90 border border-emerald-300 rounded-xl p-3 text-emerald-950 space-y-1 shadow-2xs">
+                          <div className="flex items-center gap-1.5 font-bold text-emerald-800 text-xs">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span>✓ Model Explanation & Rationale:</span>
+                          </div>
+                          <p className={`${fontSizeClasses.explanation} leading-relaxed text-emerald-900 whitespace-pre-line`}>
+                            {getExplanationText()}
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-3 text-amber-950 space-y-1.5 shadow-2xs">
+                        <div className="flex items-center gap-1.5 font-bold text-amber-900 text-xs">
+                          <Award className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span>Key Learning Takeaway & Correct Answer:</span>
+                        </div>
+                        <div className={`${fontSizeClasses.explanation} font-semibold text-amber-950`}>
+                          Correct Answer:{' '}
+                          <span className="font-bold underline decoration-amber-500">
+                            {correctList
+                              .map(
+                                (ci) =>
+                                  `Option ${String.fromCharCode(65 + ci)}: ${currentQuestion.options[ci] || ''}`
+                              )
+                              .join(' • ')}
+                          </span>
+                        </div>
+                        <p className={`${fontSizeClasses.explanation} leading-relaxed text-amber-900 whitespace-pre-line`}>
+                          {getExplanationText()}
+                        </p>
                       </div>
-                      <p className={`${fontSizeClasses.explanation} leading-relaxed text-emerald-900 whitespace-pre-line`}>
-                        {getExplanationText()}
-                      </p>
-                    </div>
-                  ) : (
-                    // INCORRECT ANSWER TEACHING PANEL
-                    <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-3 text-amber-950 space-y-1 shadow-2xs">
-                      <div className="flex items-center gap-1.5 font-bold text-amber-900 text-xs">
-                        <Award className="w-4 h-4 text-amber-600 shrink-0" />
-                        <span>Key Learning Takeaway & Correct Answer:</span>
-                      </div>
-                      <div className={`${fontSizeClasses.explanation} font-semibold text-amber-950`}>
-                        Correct Answer:{' '}
-                        <span className="font-bold underline decoration-amber-500">
-                          Option {String.fromCharCode(65 + (currentQuestion.correct_options[0] ?? 0))}:{' '}
-                          {currentQuestion.options[currentQuestion.correct_options[0] ?? 0]}
-                        </span>
-                      </div>
-                      <p className={`${fontSizeClasses.explanation} leading-relaxed text-amber-900 whitespace-pre-line`}>
-                        {getExplanationText()}
-                      </p>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -1300,9 +1373,9 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
           )}
 
           {/* ================================================================ */}
-          {/* BOTTOM QUESTION NAVIGATION BAR                                   */}
+          {/* BOTTOM QUESTION NAVIGATION & ACTION BAR (Pinned, Zero-Overlap)    */}
           {/* ================================================================ */}
-          <div className="pt-2 border-t border-slate-100 mt-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
+          <div className="pt-3 border-t border-slate-200 mt-2 flex flex-wrap items-center justify-between gap-2 shrink-0 bg-white z-10">
             <div className="flex items-center gap-1.5">
               {/* Previous Question Button */}
               <button
@@ -1329,7 +1402,20 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
               )}
             </div>
 
-            {/* Primary Action Button: Next Question & Spin Next Learner */}
+            {/* Middle Action: Multi-Select Check Answer Button */}
+            {isMultiSelectFormat && !isRevealed && (
+              <button
+                type="button"
+                onClick={handleSubmitMultiAnswer}
+                disabled={selectedOptionIndices.length === 0}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <Check className="w-4 h-4" />
+                <span>Check Answer ({selectedOptionIndices.length} Selected)</span>
+              </button>
+            )}
+
+            {/* Right Action: Next Question & Spin Next Learner */}
             {currentQIndex < totalQuestions - 1 ? (
               <button
                 type="button"

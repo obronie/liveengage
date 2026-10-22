@@ -13,294 +13,597 @@ export function cleanJsonResponse(rawText: string): string {
 }
 
 // Fallback questions generator for occupational training if API key is absent or offline
-export function getSampleOccupationalQuestions(topic: string = 'General', count: number = 6): AIGeneratedQuestion[] {
-  const pool: AIGeneratedQuestion[] = [
-    {
-      format: 'MCQ',
-      body: 'Order #409 requests 120 cartons of chilled beef. The supplier delivers 110 cartons with 2 cartons leaking. The delivery note states 120 cartons. What is the variance and what document must you immediately endorse?',
-      additionalText: 'EISA Assessment Standard 1.1: Physical shortage (-10) plus damaged stock (-2) equals -12 cartons total variance. The receiving clerk must endorse the supplier Delivery Note before the driver departs and issue a Discrepancy Note.',
-      options: [
-        '-12 cartons; endorse Delivery Note & issue Discrepancy Note',
-        '+10 cartons; sign delivery note as accepted',
-        '-10 cartons; notify manager verbally without signing',
-        '0 variance; accept total and adjust inventory tomorrow'
-      ],
-      correctOptions: [0],
-      duration: 45,
-      guideTopicHint: 'EISA Focus Area 1: Receiving Variance Checks'
-    },
-    {
-      format: 'MCQ',
-      body: 'According to your Learner Guide, what is the minimum required clearance perimeter that must remain unobstructed around electrical distribution boards and emergency exit paths?',
-      additionalText: 'Learner Guide Section 2.1 mandates a minimum 1.2-meter clear perimeter at all times to ensure unhindered emergency egress and rapid fire department access. Door swing alone (0.8m) is not sufficient.',
-      options: [
-        '0.5 meters',
-        '1.2 meters',
-        '2.5 meters',
-        'Only clearance for the door swing'
-      ],
-      correctOptions: [1],
-      duration: 45,
-      guideTopicHint: 'Section 2.1 - Core Workplace Housekeeping Duties'
-    },
-    {
-      format: 'MULTIPLE',
-      body: 'When receiving Class 8 Corrosive Industrial Cleaning Chemicals into the warehouse, which safety controls are mandatory? (Select all that apply)',
-      additionalText: 'EISA Criterion 1.2 & SDS protocols mandate storing corrosives in designated bunded chemical containment, ensuring eyewash stations are within 10 seconds, and wearing chemical splash goggles with nitrile PPE. Never store corrosives above eye level.',
-      options: [
-        'Secondary bunded containment pallets',
-        'Accessible emergency eyewash station within 10 seconds',
-        'Nitrile gloves (min 0.4mm thickness)',
-        'Stacking on top rack level above dry food provisions'
-      ],
-      correctOptions: [0, 1, 2],
-      duration: 60,
-      guideTopicHint: 'EISA Criterion 1.2: Stock Characteristics & Hazchem'
-    },
-    {
-      format: 'BINARY',
-      body: 'True or False: Standard warehouse safety operating procedures permit pallets to be stacked up to 5 tiers high on open warehouse floor space without racking bays.',
-      additionalText: 'False. Pallets must never be stacked more than 3 tiers high on open floors unless locked within calibrated drive-in racking bays to avoid tip-over hazard.',
-      options: ['True', 'False'],
-      correctOptions: [1],
-      duration: 30,
-      guideTopicHint: 'Pallet Stacking Limits'
-    },
-    {
-      format: 'WORD_CLOUD',
-      body: 'In one or two words, what is the very first standard action taken upon discovering an unidentified liquid chemical spill on the receiving bay?',
-      additionalText: 'Barricade / Isolate / Contain! Immediate isolation with chevron warning cones protects other personnel before clean-up begins.',
-      options: [],
-      correctOptions: [],
-      duration: 45,
-      guideTopicHint: 'Spill Management Protocols'
-    },
+// Strictly segmented by Cluster ID to prevent topic cross-bleeding
+const FALLBACK_CLUSTER_POOLS: Record<string, AIGeneratedQuestion[]> = {
+  // Cluster 1.1: The Receiving and Dispatch Environment
+  '1.1': [
     {
       format: 'MCQ',
       body: 'What is the maximum allowable receiving core temperature for chilled dairy and fresh meat deliveries before mandatory quarantine or rejection?',
-      additionalText: 'Cold-chain SOP: Chilled perishable stock must be received at or below +4°C (+5°C absolute maximum limit). Deliveries exceeding this threshold must be flagged for supervisor rejection.',
+      additionalText: '🟢 Model Answer:\nChilled perishable stock must be received at or below +4°C (+5°C absolute maximum limit). Deliveries exceeding this threshold must be flagged for supervisor rejection.\n\n📝 How the Assessor Marks This:\n• 1 Mark for +4°C (+5°C max threshold).',
       options: [
         '+4°C (maximum +5°C threshold)',
         '+10°C (ambient room temperature)',
         '+15°C',
-        'Any temperature as long as outer packaging is intact'
+        'Any temperature as long as outer packaging is intact',
       ],
       correctOptions: [0],
       duration: 45,
-      guideTopicHint: 'Cold Chain Compliance'
-    },
-    {
-      format: 'BINARY',
-      body: 'True or False: The principle of "Clean-As-You-Go" requires warehouse clerks to clean up discarded plastic wrap and timber offcuts immediately, rather than waiting for end-of-shift sweeping.',
-      additionalText: 'True. Clean-as-you-go prevents slip, trip, and forklift entanglement hazards in real time throughout operational shifts.',
-      options: ['True', 'False'],
-      correctOptions: [0],
-      duration: 30,
-      guideTopicHint: 'Five Pillars of Housekeeping'
-    },
-    {
-      format: 'MULTIPLE',
-      body: 'Which pieces of information MUST match between the Purchase Order (PO) and Supplier Delivery Note before signing receipt? (Select all that apply)',
-      additionalText: 'Cross-document verification: Supplier name, Purchase Order number, product SKU/item codes, and ordered unit pack sizes must align precisely before goods acceptance.',
-      options: [
-        'Purchase Order (PO) Reference Number',
-        'Product SKU / Item Codes and descriptions',
-        'Supplier Business Entity Name',
-        'Driver personal cell phone number'
-      ],
-      correctOptions: [0, 1, 2],
-      duration: 60,
-      guideTopicHint: 'Receiving Inbound Documentation'
-    },
-    {
-      format: 'SCALE',
-      body: 'On a scale of 1 to 5, rate the risk severity of staging empty wooden pallets in front of an emergency fire hose reel.',
-      additionalText: 'Severity 5: Obstructing fire firefighting equipment is a direct statutory contravention under OHS regulations and carries zero tolerance.',
-      options: ['1 - Negligible', '2 - Low Risk', '3 - Moderate Risk', '4 - High Risk', '5 - Critical OHS Violation'],
-      correctOptions: [4],
-      duration: 30,
-      guideTopicHint: 'Fire Safety Compliance'
+      guideTopicHint: 'Cluster 1.1 • Cold Chain Receiving Thresholds',
     },
     {
       format: 'MCQ',
-      body: 'When managing perishable goods or pharmaceuticals with stamped expiry dates, which stock rotation method is strictly required?',
-      additionalText: 'FEFO (First-Expired, First-Out) ensures stock closest to expiration is picked and dispatched first, preventing expired stock obsolescence.',
+      body: 'In South African cold-chain warehouse logistics, what is the maximum permissible dock dwell time for palletized frozen cargo before returning to blast freezer temperature?',
+      additionalText: '🟢 Model Answer:\nFrozen stock must not remain on the open receiving or dispatch dock for more than 30 minutes to prevent surface thawing and bacterial growth.\n\n📝 How the Assessor Marks This:\n• 1 Mark for 30-minute dock dwell rule.',
       options: [
-        'FEFO (First-Expired, First-Out)',
-        'LIFO (Last-In, First-Out)',
-        'Random access storage',
-        'Heaviest pallet first'
+        '30 minutes maximum',
+        '2 hours',
+        '4 hours',
+        'Until the end of the shift',
       ],
       correctOptions: [0],
       duration: 45,
-      guideTopicHint: 'Stock Rotation Principles'
-    },
-    {
-      format: 'MCQ',
-      body: 'An inbound supplier arrives with goods, but no Delivery Note or Inbound Waybill is provided. What is the standard operating procedure?',
-      additionalText: 'SOP Mandate: Inbound shipments without commercial delivery paperwork must not be received into general stock. Goods must be quarantined in the designated holding bay until paperwork is produced.',
-      options: [
-        'Move goods to quarantine bay and refuse receipt until documentation is provided',
-        'Sign a blank piece of paper and unpack directly into picking bins',
-        'Allow the driver to leave and search for the invoice next week',
-        'Accept the delivery only if the driver seems trustworthy'
-      ],
-      correctOptions: [0],
-      duration: 45,
-      guideTopicHint: 'Receiving Discrepancies'
-    },
-    {
-      format: 'MULTIPLE',
-      body: 'Which PPE items are mandatory for all personnel walking through active forklift transit zones and container de-stuffing bays? (Select all that apply)',
-      additionalText: 'Warehouse OHS standards mandate high-visibility reflective vests and steel-toe safety boots in all active mechanical equipment zones.',
-      options: [
-        'High-visibility reflective vest (Class 2)',
-        'Steel-toe cap safety footwear',
-        'Safety glasses / eye protection in designated zones',
-        'Casual canvas trainers'
-      ],
-      correctOptions: [0, 1, 2],
-      duration: 45,
-      guideTopicHint: 'Warehouse PPE Standards'
-    },
-    {
-      format: 'BINARY',
-      body: 'True or False: A receiving clerk is legally permitted to endorse a delivery note with "Subject to Check" to release a hurried delivery driver.',
-      additionalText: 'False. Modern logistics and EISA criteria disallow "Subject to Check" signatures. Physical count and carton integrity must be checked before signing.',
-      options: ['True', 'False'],
-      correctOptions: [1],
-      duration: 30,
-      guideTopicHint: 'Document Endorsement Legality'
-    },
-    {
-      format: 'WORD_CLOUD',
-      body: 'In one word or acronym, what technical document must accompany every hazardous chemical stored in the warehouse?',
-      additionalText: 'SDS or MSDS (Safety Data Sheet / Material Safety Data Sheet).',
-      options: [],
-      correctOptions: [],
-      duration: 45,
-      guideTopicHint: 'Hazchem & Chemical Safety'
-    },
-    {
-      format: 'MCQ',
-      body: 'During physical unloading, you notice 3 cartons on a pallet are visibly crushed and leaking unknown liquid. What is the immediate correct step?',
-      additionalText: 'Damaged stock must be photographed, segregated immediately into the quarantine bay, endorsed on the delivery note as damaged, and escalated to the receiving supervisor.',
-      options: [
-        'Isolate damaged cartons in quarantine bay, document with photos, and endorse discrepancy on Delivery Note',
-        'Tape up the crushed cartons and place them in general picking bins',
-        'Hide the cartons behind good stock on the bottom pallet tier',
-        'Discard the cartons in the general garbage skip immediately'
-      ],
-      correctOptions: [0],
-      duration: 45,
-      guideTopicHint: 'Damaged Stock Quarantine'
+      guideTopicHint: 'Cluster 1.1 • Cold Chain Dock Dwell Limit',
     },
     {
       format: 'MCQ',
       body: 'In cross-docking operations, what is the maximum recommended staging dwell time for inbound cross-dock freight before outbound loading?',
-      additionalText: 'True cross-docking requires rapid turnover, typically under 24 hours (and often under 4 hours for FMCG), with zero long-term storage putaway.',
+      additionalText: '🟢 Model Answer:\nTrue cross-docking requires rapid turnaround, typically under 24 hours (and often under 4 hours for FMCG), with zero long-term storage putaway.\n\n📝 How the Assessor Marks This:\n• 1 Mark for under 24 hours direct transfer standard.',
       options: [
         'Under 24 hours (direct transfer without long-term storage)',
         '7 business days',
         '30 days',
-        'Whenever warehouse staff have spare time'
+        'Whenever warehouse staff have spare time',
       ],
       correctOptions: [0],
       duration: 45,
-      guideTopicHint: 'Cross-Docking Staging'
-    },
-    {
-      format: 'MULTIPLE',
-      body: 'Which of the following are direct indicators of pest or vermin infestation in a warehouse storage area? (Select all that apply)',
-      additionalText: 'Housekeeping and health audit standards: Gnawed packaging, droppings along skirting boards, and nesting materials are immediate signs of pest non-conformance.',
-      options: [
-        'Droppings along walls or underneath pallet racking',
-        'Gnawed corners on cardboard cartons or grain bags',
-        'Shredded shrink-wrap and paper nesting material in corners',
-        'Properly positioned ultrasonic pest repellent beacons'
-      ],
-      correctOptions: [0, 1, 2],
-      duration: 45,
-      guideTopicHint: 'Pest & Vermin Prevention'
+      guideTopicHint: 'Cluster 1.1 • Cross-Docking Staging Limits',
     },
     {
       format: 'BINARY',
-      body: 'True or False: Flammable liquids (Class 3) may be stored directly adjacent to Class 5 Oxidizing agents as long as both are on certified timber pallets.',
-      additionalText: 'False. Oxidizers supply oxygen and intensify combustion; they must be physically segregated from flammable liquids by fire-rated partitions or statutory clearance distances.',
+      body: 'True or False: In a Third-Party Logistics (3PL) model, the outsourced contractor manages warehousing and transport operations while legal ownership of inventory remains with the client.',
+      additionalText: '🟢 Model Answer:\nTrue. A 3PL provider provides logistics services, labor, and facilities, but never takes commercial ownership or title of the stock.\n\n📝 How the Assessor Marks This:\n• 1 Mark for True and recognizing 3PL inventory ownership principles.',
       options: ['True', 'False'],
-      correctOptions: [1],
+      correctOptions: [0],
       duration: 30,
-      guideTopicHint: 'Dangerous Goods Segregation'
+      guideTopicHint: 'Cluster 1.1 • 3PL Supply Chain Roles',
+    },
+    {
+      format: 'MCQ',
+      body: 'Which key document accompanies inbound goods to verify physical quantities against the original purchasing agreement?',
+      additionalText: '🟢 Model Answer:\nThe Supplier Delivery Note / Inbound Waybill is physically reconciled line-by-line against the company Purchase Order (PO).\n\n📝 How the Assessor Marks This:\n• 1 Mark for Delivery Note matched against Purchase Order.',
+      options: [
+        'Supplier Delivery Note matched against Purchase Order (PO)',
+        'Staff Time Sheet',
+        'Equipment Maintenance Log',
+        'Vehicle Roadworthy Certificate',
+      ],
+      correctOptions: [0],
+      duration: 45,
+      guideTopicHint: 'Cluster 1.1 • Inbound Information Flows',
+    },
+    {
+      format: 'BINARY',
+      body: 'True or False: A perpetual inventory tracking system records inventory balances continuously in real-time with every receiving and dispatch transaction, rather than waiting for annual stocktaking.',
+      additionalText: '🟢 Model Answer:\nTrue. Perpetual inventory systems update balances immediately via ERP/WMS barcoding after every stock movement.\n\n📝 How the Assessor Marks This:\n• 1 Mark for True and defining perpetual vs periodic inventory.',
+      options: ['True', 'False'],
+      correctOptions: [0],
+      duration: 30,
+      guideTopicHint: 'Cluster 1.1 • Perpetual Inventory Systems',
+    },
+  ],
+
+  // Cluster 1.2: Prevent Shrinkage and Losses
+  '1.2': [
+    {
+      format: 'MCQ',
+      body: 'Under the CRAVED loss prevention framework, what does the acronym CRAVED stand for when identifying high-theft warehouse stock?',
+      additionalText: '🟢 Model Answer:\nCRAVED stands for: Concealable, Removable, Available, Valuable, Enjoyable, and Disposable.\n\n📝 How the Assessor Marks This:\n• 1 Mark for correctly identifying all 6 CRAVED attributes.',
+      options: [
+        'Concealable, Removable, Available, Valuable, Enjoyable, Disposable',
+        'Counted, Reconciled, Audited, Verified, Evaluated, Dispatched',
+        'Clean, Restocked, Arranged, Ventilated, Enclosed, Documented',
+        'Cold, Refrigerated, Ambient, Ventilated, Evaporated, Drained',
+      ],
+      correctOptions: [0],
+      duration: 45,
+      guideTopicHint: 'Cluster 1.2 • CRAVED Shrinkage Framework',
+    },
+    {
+      format: 'MCQ',
+      body: 'At annual financial stocktake, the Book Inventory shows R450,000, while the Physical Count confirms R422,000. What is the stock shrinkage value and shrinkage percentage?',
+      additionalText: '🟢 Model Answer:\nStep 1: Shrinkage Value = Book Inventory (R450,000) - Physical Count (R422,000) = R28,000.\nStep 2: Shrinkage % = (R28,000 / R450,000) x 100 = 6.22%.\n\n📝 How the Assessor Marks This:\n• 1 Mark for R28,000 variance.\n• 1 Mark for 6.22% shrinkage calculation.',
+      options: [
+        'R28,000 shrinkage (6.22%)',
+        'R22,000 shrinkage (4.88%)',
+        'R50,000 shrinkage (11.11%)',
+        'Zero shrinkage (acceptable tolerance)',
+      ],
+      correctOptions: [0],
+      duration: 60,
+      marks: 2,
+      guideTopicHint: 'Cluster 1.2 • Retail Shrinkage Calculations',
     },
     {
       format: 'MCQ',
       body: 'Who is authorized to hold the physical keys or access tokens to high-value secured bond cages inside the distribution centre?',
-      additionalText: 'High-value shrinkage control: Only nominated, vetted supervisors or authorized inventory controllers may hold keys, with a mandatory signed key-register logbook.',
+      additionalText: '🟢 Model Answer:\nOnly nominated, vetted supervisors or authorized inventory controllers may hold keys, with a mandatory signed key-register logbook.\n\n📝 How the Assessor Marks This:\n• 1 Mark for designated supervisor and signed key-register logbook.',
       options: [
         'Designated and vetted supervisor recorded in the signed key-register logbook',
         'Any warehouse temporary casual worker',
         'External third-party delivery drivers',
-        'Keys may be left hanging on the cage lock for convenience'
+        'Keys may be left hanging on the cage lock for convenience',
       ],
       correctOptions: [0],
       duration: 45,
-      guideTopicHint: 'Shrinkage & Loss Prevention'
+      guideTopicHint: 'Cluster 1.2 • High-Value Bond Cage Security',
     },
     {
-      format: 'WORD_CLOUD',
-      body: 'In one or two words, what is the primary business consequence of inaccurate receiving and dispatch discrepancies?',
-      additionalText: 'Shrinkage, loss, stockouts, or customer dissatisfaction.',
-      options: [],
-      correctOptions: [],
+      format: 'BINARY',
+      body: 'True or False: Personal employee backpacks, jackets, and gym bags are permitted in warehouse storage aisles during active order picking shifts.',
+      additionalText: '🟢 Model Answer:\nFalse. All personal bags, coats, and lockers must remain in designated staff changerooms outside the security perimeter to prevent opportunistic concealment and internal theft.\n\n📝 How the Assessor Marks This:\n• 1 Mark for False and explaining shrinkage prevention via bag segregation.',
+      options: ['True', 'False'],
+      correctOptions: [1],
+      duration: 30,
+      guideTopicHint: 'Cluster 1.2 • Internal Theft Prevention',
+    },
+    {
+      format: 'MCQ',
+      body: 'When a warehouse suffers an unrecovered R50,000 stock loss and operates at a 5% net profit margin, how much additional sales revenue must the business generate to recover the loss?',
+      additionalText: '🟢 Model Answer:\nSales Recovery Revenue = Financial Loss / Net Profit Margin = R50,000 / 0.05 = R1,000,000 in new sales required to replace the lost margin.\n\n📝 How the Assessor Marks This:\n• 2 Marks for applying Loss / Margin formula to reach R1,000,000.',
+      options: [
+        'R1,000,000 in additional sales',
+        'R50,000 in sales',
+        'R250,000 in sales',
+        'R500,000 in sales',
+      ],
+      correctOptions: [0],
+      duration: 60,
+      marks: 2,
+      guideTopicHint: 'Cluster 1.2 • Sales Recovery Revenue Formula',
+    },
+    {
+      format: 'MULTIPLE',
+      body: 'Which physical security and storage controls are mandatory for high-theft Class A items (e.g. smartphones, razor blades, premium spirits)? (Select all that apply)',
+      additionalText: '🟢 Model Answer:\nHigh-theft items require: (1) Fully enclosed floor-to-ceiling high-security wire mesh cage, (2) Dual-custody key / biometric access control, and (3) 24/7 dedicated CCTV coverage with zero blind spots.\n\n📝 How the Assessor Marks This:\n• 1 Mark for cage, dual access, and CCTV.',
+      options: [
+        'Fully enclosed floor-to-ceiling high-security wire mesh cage',
+        'Dual-custody key / biometric access control',
+        '24/7 dedicated CCTV coverage with zero blind spots',
+        'Open pallets placed directly next to the driver exit door',
+      ],
+      correctOptions: [0, 1, 2],
+      duration: 60,
+      marks: 2,
+      guideTopicHint: 'Cluster 1.2 • Physical Loss Controls',
+    },
+  ],
+
+  // Cluster 1.3: Principles of Receiving and Checking Deliveries
+  '1.3': [
+    {
+      format: 'MCQ',
+      body: 'Order #409 requests 120 cartons of chilled beef. The supplier delivers 110 cartons with 2 cartons leaking. The delivery note states 120 cartons. What is the variance and what document must you immediately endorse?',
+      additionalText: '🟢 Model Answer:\nPhysical Shortage = 120 - 110 = -10 cartons. Damaged Stock = -2 cartons. Total Variance = -12 cartons. The receiving clerk must endorse the Delivery Note before the driver departs and issue a Discrepancy Note.\n\n📝 How the Assessor Marks This:\n• 1 Mark for -12 cartons total variance.\n• 1 Mark for endorsing Delivery Note & issuing Discrepancy Note.',
+      options: [
+        '-12 cartons total variance; endorse Delivery Note & issue Discrepancy Note',
+        '+10 cartons; sign delivery note as accepted',
+        '-10 cartons; notify manager verbally without signing',
+        '0 variance; accept total and adjust inventory tomorrow',
+      ],
+      correctOptions: [0],
       duration: 45,
-      guideTopicHint: 'Loss Prevention & Customer Service'
+      marks: 2,
+      guideTopicHint: 'Cluster 1.3 • Receiving Variance Reconciliation',
+    },
+    {
+      format: 'BINARY',
+      body: 'True or False: A receiving clerk is legally permitted to endorse a supplier delivery note with "Subject to Check" to release a hurried delivery driver.',
+      additionalText: '🟢 Model Answer:\nFalse. Modern logistics law and EISA criteria disallow "Subject to Check" signatures. Physical count and carton integrity must be checked before signing, or the receiving warehouse assumes full financial liability.\n\n📝 How the Assessor Marks This:\n• 1 Mark for identifying False and explaining legal liability transfer.',
+      options: ['True', 'False'],
+      correctOptions: [1],
+      duration: 30,
+      guideTopicHint: 'Cluster 1.3 • Document Endorsement Legality',
+    },
+    {
+      format: 'MULTIPLE',
+      body: 'Which pieces of information MUST match between the Purchase Order (PO) and Supplier Delivery Note before signing receipt? (Select all that apply)',
+      additionalText: '🟢 Model Answer:\nCross-document verification: Purchase Order reference number, Product SKU/item codes & descriptions, and Supplier business entity name must match precisely before goods acceptance.\n\n📝 How the Assessor Marks This:\n• 1 Mark for PO number, SKU codes, and supplier name.',
+      options: [
+        'Purchase Order (PO) Reference Number',
+        'Product SKU / Item Codes and descriptions',
+        'Supplier Business Entity Name',
+        'Driver personal cell phone number',
+      ],
+      correctOptions: [0, 1, 2],
+      duration: 60,
+      marks: 2,
+      guideTopicHint: 'Cluster 1.3 • 3-Way Receiving Verification',
+    },
+    {
+      format: 'MCQ',
+      body: 'An inbound supplier arrives with goods, but no Delivery Note or Inbound Waybill is provided. What is the standard operating procedure?',
+      additionalText: '🟢 Model Answer:\nInbound shipments without commercial delivery paperwork must not be booked into general stock. Goods must be quarantined in the designated holding bay until official documentation is produced.\n\n📝 How the Assessor Marks This:\n• 1 Mark for quarantining goods and refusing unpapered receipt.',
+      options: [
+        'Move goods to quarantine bay and refuse receipt until documentation is provided',
+        'Sign a blank piece of paper and unpack directly into picking bins',
+        'Allow the driver to leave and search for the invoice next week',
+        'Accept the delivery only if the driver seems trustworthy',
+      ],
+      correctOptions: [0],
+      duration: 45,
+      guideTopicHint: 'Cluster 1.3 • Missing Documentation Protocols',
     },
     {
       format: 'CLOZE',
       body: 'Complete the receiving SOP rule using the Word Bank [GRN | Delivery Note | Purchase Order | Credit Request]: Only undamaged, physically verified stock may be entered onto the [1] as accepted into inventory.',
-      additionalText: '🟢 Correct Answer: GRN (Goods Received Note).\n📐 Rule (KM-03): Only physically verified, undamaged stock is booked into inventory via the GRN. Damaged stock is rejected on the Delivery Note.',
+      additionalText: '🟢 Model Answer:\nOnly undamaged, physically verified stock is booked into warehouse inventory via the Goods Received Note (GRN). Damaged or missing items are endorsed on the Delivery Note and claimed via Credit Request.\n\n📝 How the Assessor Marks This:\n• 1 Mark for GRN.',
       options: ['GRN', 'Delivery Note', 'Purchase Order', 'Credit Request'],
       correctOptions: [0],
       duration: 60,
       marks: 2,
-      guideTopicHint: 'CLOZE::GRN::GRN|Delivery Note|Purchase Order|Credit Request'
+      guideTopicHint: 'Cluster 1.3 • Goods Received Note Rules',
+    },
+    {
+      format: 'MCQ',
+      body: 'A paper mill receiving clerk checks a delivery of industrial strapping rolls invoiced at R350 per roll. The delivery note lists 60 rolls. A physical tally confirms only 52 rolls on the pallet. What monetary value must be recorded on the Discrepancy Note?',
+      additionalText: '🟢 Model Answer:\nStep 1: 60 invoiced - 52 received = 8 missing rolls.\nStep 2: 8 rolls x R350 = R2,800 discrepancy claim value.\n\n📝 How the Assessor Marks This:\n• 1 Mark for calculating 8 missing rolls.\n• 1 Mark for R2,800 total claim calculation.',
+      options: ['R2,800', 'R21,000', 'R18,200', 'R3,500'],
+      correctOptions: [0],
+      duration: 60,
+      marks: 2,
+      guideTopicHint: 'Cluster 1.3 • Discrepancy Claim Valuation',
+    },
+  ],
+
+  // Cluster 2.1: Dispatch Stock from the Business
+  '2.1': [
+    {
+      format: 'MCQ',
+      body: 'In the standard warehouse dispatch workflow, what operational step must be completed immediately prior to staging goods at the outbound loading dock?',
+      additionalText: '🟢 Model Answer:\nEvery picked order must undergo independent picking validation and carton count checking against the picking slip before moving into outbound staging bays.\n\n📝 How the Assessor Marks This:\n• 1 Mark for picking validation against picking slip.',
+      options: [
+        'Order picking validation & quality checking against the picking slip',
+        'Immediate loading into the delivery vehicle without checking',
+        'Discarding all picked order paperwork into recycling',
+        'Changing carton quantities to match whatever fits on the truck',
+      ],
+      correctOptions: [0],
+      duration: 45,
+      guideTopicHint: 'Cluster 2.1 • Dispatch Workflow Sequence',
+    },
+    {
+      format: 'MCQ',
+      body: 'When staging customer orders in dispatch marshalling bays, why must orders be strictly segregated into clearly demarcated floor bays?',
+      additionalText: '🟢 Model Answer:\nClear bay demarcation prevents order cross-contamination, eliminates mixed destination loads, and stops cartons belonging to Customer A being erroneously loaded on Customer B truck.\n\n📝 How the Assessor Marks This:\n• 1 Mark for preventing cross-contamination and misrouting.',
+      options: [
+        'To prevent cross-contamination of customer orders and incorrect vehicle loading',
+        'To allow forklift operators to drive at maximum speed without stopping',
+        'To hide damaged stock from customer transport drivers',
+        'Because floor paint improves warehouse aesthetic lighting',
+      ],
+      correctOptions: [0],
+      duration: 45,
+      guideTopicHint: 'Cluster 2.1 • Staging Bay Segregation',
+    },
+    {
+      format: 'MULTIPLE',
+      body: 'Which critical data fields on a picking slip must the picker verify before passing the order to the packing table? (Select all that apply)',
+      additionalText: '🟢 Model Answer:\nThe picker must verify SKU code, quantity picked, batch/lot number, and destination customer/branch code against the order line items.\n\n📝 How the Assessor Marks This:\n• 1 Mark for SKU code, picked quantity, batch number, and destination code.',
+      options: [
+        'Item SKU code and description',
+        'Quantity picked matching requested units',
+        'Batch / Lot / Expiry number for regulated stock',
+        'Destination customer or branch delivery code',
+      ],
+      correctOptions: [0, 1, 2, 3],
+      duration: 60,
+      marks: 2,
+      guideTopicHint: 'Cluster 2.1 • Picking Slip Validation',
+    },
+    {
+      format: 'BINARY',
+      body: 'True or False: Outbound orders may be temporarily staged directly in front of emergency fire escape doors if the collection vehicle is expected to arrive within 15 minutes.',
+      additionalText: '🟢 Model Answer:\nFalse. Statutory OHS regulations strictly prohibit blocking fire escape doors, emergency routes, or fire hose reels at ANY time, regardless of how soon a truck will arrive.\n\n📝 How the Assessor Marks This:\n• 1 Mark for False and citing statutory emergency exit clearance.',
+      options: ['True', 'False'],
+      correctOptions: [1],
+      duration: 30,
+      guideTopicHint: 'Cluster 2.1 • Dispatch Staging Clearances',
+    },
+    {
+      format: 'MCQ',
+      body: 'If an order picker discovers that a designated picking bin contains fewer items than requested on the picking slip, what is the immediate required protocol?',
+      additionalText: '🟢 Model Answer:\nThe picker must report the shortage immediately to the inventory controller / supervisor, endorse the shortage on the picking slip, and never pull random stock from unallocated bins without authorization.\n\n📝 How the Assessor Marks This:\n• 1 Mark for reporting shortage and stopping unauthorized picking.',
+      options: [
+        'Report stock shortage to supervisor, endorse picking slip, and do not pick from unallocated bins',
+        'Take similar items from an adjacent aisle without recording',
+        'Mark the order as complete and let the customer discover the shortage',
+        'Cancel the entire customer order without notifying anyone',
+      ],
+      correctOptions: [0],
+      duration: 45,
+      guideTopicHint: 'Cluster 2.1 • Order Picking Discrepancies',
+    },
+    {
+      format: 'MCQ',
+      body: 'When consolidating multi-item orders onto outbound dispatch pallets, which stacking principle must always be followed?',
+      additionalText: '🟢 Model Answer:\nHeavier, rigid master cartons must be placed on the bottom tiers, with progressively lighter and smaller packages stacked above to prevent crushing and load instability.\n\n📝 How the Assessor Marks This:\n• 1 Mark for heaviest cartons on bottom tiers.',
+      options: [
+        'Heaviest, most rigid cartons on the bottom tiers; lighter items on top',
+        'Lightest and most fragile items on the bottom to support the load',
+        'Random order based purely on which items were picked first',
+        'Pyramid stacking with heavy items balanced on top corners',
+      ],
+      correctOptions: [0],
+      duration: 45,
+      guideTopicHint: 'Cluster 2.1 • Pallet Staging & Consolidation',
+    },
+  ],
+
+  // Cluster 2.2: Principles for Recording Dispatches
+  '2.2': [
+    {
+      format: 'MCQ',
+      body: 'While operating an electric pallet jack in the dispatch staging bay, the operator notices hydraulic fluid weeping from the lift cylinder. What is the mandatory 3-step Faulty Equipment Protocol?',
+      additionalText: '🟢 Model Answer:\nThe standard 3-step protocol is: (1) STOP operating the equipment immediately, (2) TAG OUT the equipment with a high-visibility Out-of-Service tag and remove keys, and (3) REPORT the fault in writing to the dispatch supervisor / workshop.\n\n📝 How the Assessor Marks This:\n• 2 Marks for stating STOP, TAG OUT, and REPORT in sequence.',
+      options: [
+        'STOP operation immediately, TAG OUT equipment with Out-of-Service tag, and REPORT to supervisor',
+        'Wipe the oil with a rag and continue driving until shift end',
+        'Park the equipment in an empty aisle and leave it for the next shift',
+        'Top up the cylinder with motor oil without logging a fault',
+      ],
+      correctOptions: [0],
+      duration: 45,
+      marks: 2,
+      guideTopicHint: 'Cluster 2.2 • 3-Step Faulty Equipment Protocol',
+    },
+    {
+      format: 'MCQ',
+      body: 'Which Material Handling Equipment (MHE) is most appropriate for safely loading pallets onto a curtain-side line-haul road freight trailer from ground level?',
+      additionalText: '🟢 Model Answer:\nA Counterbalance Forklift equipped with certified fork tines and rated load capacity is standard for outdoor ground-level vehicle loading.\n\n📝 How the Assessor Marks This:\n• 1 Mark for Counterbalance Forklift.',
+      options: [
+        'Counterbalance Forklift with certified fork tines',
+        'Manual 2-wheel hand sack barrow',
+        'Narrow-aisle turret truck',
+        'High-reach order picker platform',
+      ],
+      correctOptions: [0],
+      duration: 45,
+      guideTopicHint: 'Cluster 2.2 • MHE Selection Standards',
+    },
+    {
+      format: 'MCQ',
+      body: 'Before releasing an outbound delivery vehicle from the dispatch bay, what documentation must the collecting carrier driver sign and date in legible handwriting?',
+      additionalText: '🟢 Model Answer:\nThe driver must physically verify carton/pallet count and sign, date, print their full legal name, and record their vehicle registration number on the official Dispatch Advice / Proof of Delivery (POD).\n\n📝 How the Assessor Marks This:\n• 1 Mark for Dispatch Advice / POD signed with name and vehicle registration.',
+      options: [
+        'Official Dispatch Advice / Delivery Note with driver name and vehicle registration',
+        'Warehouse visitor register badge only',
+        'ERP picking slip copy without driver details',
+        'Driver personal delivery logbook only',
+      ],
+      correctOptions: [0],
+      duration: 45,
+      guideTopicHint: 'Cluster 2.2 • Driver Handover & Dispatch Register',
+    },
+    {
+      format: 'BINARY',
+      body: 'True or False: An MHE operator whose forklift driver certification expired last week may continue driving during peak dispatch periods if authorized verbally by a peer.',
+      additionalText: '🟢 Model Answer:\nFalse. Driving mechanical equipment without valid statutory accreditation contravenes the Driven Machinery Regulations (OHS Act) and invalidates warehouse insurance.\n\n📝 How the Assessor Marks This:\n• 1 Mark for False and citing statutory licensing compliance.',
+      options: ['True', 'False'],
+      correctOptions: [1],
+      duration: 30,
+      guideTopicHint: 'Cluster 2.2 • MHE Operator Licensing Compliance',
+    },
+    {
+      format: 'CLOZE',
+      body: 'According to the Dispatch Documentation & Handover Sequence, the official Dispatch Advice must record the driver details. The driver must then provide their full name, legible [1], date, and vehicle [2] on the dispatch register.',
+      additionalText: '🟢 Model Answer:\nGap 1: signature; Gap 2: registration.\nHandover sequence mandates full legal driver signature and vehicle registration before gate pass issuance.\n\n📝 How the Assessor Marks This:\n• 1 Mark per correct gap assignment.',
+      options: ['signature', 'registration', 'fingerprint', 'invoice'],
+      correctOptions: [0, 1],
+      duration: 60,
+      marks: 2,
+      guideTopicHint: 'Cluster 2.2 • Dispatch Register Sign-Off',
+    },
+    {
+      format: 'MULTIPLE',
+      body: 'Which documents must be matched and reconciled in the dispatch office before confirming electronic shipment departure in the ERP system? (Select all that apply)',
+      additionalText: '🟢 Model Answer:\nThe dispatch clerk must reconcile: (1) Sales Order, (2) Signed Picking Slip, and (3) Carrier-signed Dispatch Advice / POD.\n\n📝 How the Assessor Marks This:\n• 1 Mark for Sales Order, Picking Slip, and signed Dispatch Advice.',
+      options: [
+        'Sales Order reference and customer line items',
+        'Completed and signed Order Picking Slip',
+        'Dispatch Advice / POD signed by collecting carrier driver',
+        'Supplier inbound credit note from previous week',
+      ],
+      correctOptions: [0, 1, 2],
+      duration: 60,
+      marks: 2,
+      guideTopicHint: 'Cluster 2.2 • Dispatch Documentation Matching',
+    },
+  ],
+
+  // Cluster 2.3: Principles of Packing and Labelling Dispatches
+  '2.3': [
+    {
+      format: 'MCQ',
+      body: 'A dispatch consignment contains 4 cartons measuring 50cm x 40cm x 30cm each. The actual scale weight for all 4 cartons combined is 36kg. Using the courier volumetric divisor of 5000, what is the volumetric weight, and which weight will the carrier bill for?',
+      additionalText: '🟢 Model Answer:\nStep 1: Single box volume = (50 x 40 x 30) / 5000 = 60,000 / 5000 = 12kg volumetric per box.\nStep 2: Total volumetric weight = 12kg x 4 cartons = 48kg.\nStep 3: Carrier bills on greater of actual (36kg) vs volumetric (48kg) = 48kg volumetric weight billed.\n\n📝 How the Assessor Marks This:\n• 1 Mark for calculating 48kg volumetric weight.\n• 1 Mark for identifying carrier bills on greater weight (48kg).',
+      options: [
+        '48kg, billed at volumetric weight',
+        '36kg, billed at actual weight',
+        '12kg, billed at actual weight',
+        '60kg, billed at volumetric weight',
+      ],
+      correctOptions: [0],
+      duration: 60,
+      marks: 3,
+      guideTopicHint: 'Cluster 2.3 • Courier Volumetric Weight Calculation',
+    },
+    {
+      format: 'MCQ',
+      body: 'A customer dispatch advice lists taxable merchandise at a subtotal of R18,000. Under South African tax regulations, what is the mandatory 15% VAT amount and the final invoice total?',
+      additionalText: '🟢 Model Answer:\nStep 1: VAT = R18,000 x 0.15 = R2,700.\nStep 2: Final Total = R18,000 + R2,700 = R20,700.\n\n📝 How the Assessor Marks This:\n• 1 Mark for calculating R2,700 VAT.\n• 1 Mark for calculating R20,700 total.',
+      options: [
+        'VAT: R2,700; Final Total: R20,700',
+        'VAT: R1,800; Final Total: R19,800',
+        'VAT: R2,500; Final Total: R20,500',
+        'VAT: R0; Final Total: R18,000',
+      ],
+      correctOptions: [0],
+      duration: 60,
+      marks: 2,
+      guideTopicHint: 'Cluster 2.3 • South African 15% VAT Math',
+    },
+    {
+      format: 'MULTIPLE',
+      body: 'Which four pieces of mandatory shipping information must appear on all exterior dispatch carton labels? (Select all that apply)',
+      additionalText: '🟢 Model Answer:\nMandatory carton labels must record: (1) Consignee name & destination address, (2) Consignment/Waybill number, (3) Carton box count sequence (e.g. Box 1 of 3), and (4) Handling symbols (e.g. Fragile / This Way Up).\n\n📝 How the Assessor Marks This:\n• 1 Mark for consignee address, waybill number, box count, and handling symbols.',
+      options: [
+        'Consignee business name and physical destination delivery address',
+        'Master consignment tracking or waybill number',
+        'Box sequence number of total shipment (e.g. Box 1 of 4)',
+        'Handling warning pictograms (e.g. Fragile glass or This Way Up)',
+      ],
+      correctOptions: [0, 1, 2, 3],
+      duration: 60,
+      marks: 2,
+      guideTopicHint: 'Cluster 2.3 • Mandatory Dispatch Labelling',
+    },
+    {
+      format: 'BINARY',
+      body: 'True or False: For fragile electronic goods, loose-fill expanded polystyrene peanuts provide sufficient protection without secondary inner bubble wrap or corner edge protectors.',
+      additionalText: '🟢 Model Answer:\nFalse. Loose-fill peanuts settle and shift during vehicle transit, allowing fragile items to migrate to outer box walls and shatter on impact. Fragile goods require tight bubble wrapping and rigid corner protectors.\n\n📝 How the Assessor Marks This:\n• 1 Mark for False and explaining why loose-fill shifts during transit.',
+      options: ['True', 'False'],
+      correctOptions: [1],
+      duration: 30,
+      guideTopicHint: 'Cluster 2.3 • Protective Packaging Selection',
     },
     {
       format: 'CLOZE',
       body: 'A factory pallet holds 8 cartons per layer, stacked 5 layers high. To stage an outbound order of 160 cartons, the dispatch clerk must prepare [1] full pallets. (Type number only)',
-      additionalText: '🟢 Correct Answer: 4.\n📐 Calculation: Step 1: 8 cartons/layer x 5 layers = 40 cartons/pallet. Step 2: 160 / 40 = 4 full pallets.',
+      additionalText: '🟢 Model Answer:\nStep 1: 8 cartons/layer x 5 layers = 40 cartons/pallet.\nStep 2: 160 cartons / 40 cartons per pallet = 4 full pallets.\n\n📝 How the Assessor Marks This:\n• 1 Mark for 4.',
       options: ['4', '3', '5', '20'],
       correctOptions: [0],
       duration: 60,
-      marks: 3,
-      guideTopicHint: 'CLOZE::4::4|3|5|20'
+      marks: 2,
+      guideTopicHint: 'Cluster 2.3 • Pallet Layering Calculations',
     },
     {
       format: 'MCQ',
-      body: 'A carton measuring 60cm x 50cm x 40cm weighs 14kg on the scale. The courier volumetric divisor is 5000. What is the volumetric weight, and which weight will the carrier bill for?',
-      additionalText: '🟢 Correct Answer: 24kg, billed at volumetric weight.\n📐 Calculation: (60 x 50 x 40) / 5000 = 120,000 / 5000 = 24kg. Carriers bill on the greater of actual weight (14kg) vs volumetric weight (24kg).',
+      body: 'Which strapping material is most appropriate for securing heavy unitized pallet loads of corrugated board or automotive parts during long-haul transport?',
+      additionalText: '🟢 Model Answer:\nHeavy-duty tensioned steel strapping or high-tensile polyester (PET) strapping provides the mandatory tensile strength and elongation resistance for heavy cargo unitization.\n\n📝 How the Assessor Marks This:\n• 1 Mark for high-tensile polyester or steel strapping.',
       options: [
-        '14kg, billed at actual weight',
-        '24kg, billed at volumetric weight',
-        '12kg, billed at actual weight',
-        '30kg, billed at volumetric weight'
+        'High-tensile polyester (PET) or steel strapping with metal seals',
+        'Standard clear household adhesive tape',
+        'Elastic rubber bands',
+        'Twisted jute garden twine',
       ],
-      correctOptions: [1],
-      duration: 60,
-      marks: 3,
-      guideTopicHint: 'Volumetric Weight Billing (KM-04-KT02)'
+      correctOptions: [0],
+      duration: 45,
+      guideTopicHint: 'Cluster 2.3 • Pallet Securing & Strapping',
+    },
+  ],
+
+  // Cluster 2.4: General Standards of Housekeeping
+  '2.4': [
+    {
+      format: 'MCQ',
+      body: 'According to your Learner Guide and South African OHS regulations, what is the minimum required clearance perimeter that must remain unobstructed around electrical distribution boards and emergency exit paths at all times?',
+      additionalText: '🟢 Model Answer:\nLearner Guide Section 2.4 and statutory safety standards mandate a minimum 1.2-meter unobstructed clear perimeter around all electrical distribution boards and exit pathways to ensure rapid emergency egress and fire crew access.\n\n📝 How the Assessor Marks This:\n• 1 Mark for 1.2 meters clearance standard.',
+      options: [
+        '1.2 meters',
+        '0.5 meters',
+        '2.5 meters',
+        'Only clearance for the door swing (0.8m)',
+      ],
+      correctOptions: [0],
+      duration: 45,
+      guideTopicHint: 'Cluster 2.4 • Electrical Panel Clearances',
+    },
+    {
+      format: 'BINARY',
+      body: 'True or False: The principle of "Clean-As-You-Go" requires warehouse clerks to clean up discarded plastic wrap, strapping, and timber offcuts immediately, rather than waiting for end-of-shift sweeping.',
+      additionalText: '🟢 Model Answer:\nTrue. Clean-as-you-go eliminates slips, trips, and wheel entanglement hazards in real time throughout operational shifts, preventing warehouse accidents.\n\n📝 How the Assessor Marks This:\n• 1 Mark for True and defining Clean-As-You-Go preventative safety.',
+      options: ['True', 'False'],
+      correctOptions: [0],
+      duration: 30,
+      guideTopicHint: 'Cluster 2.4 • Clean-As-You-Go Standards',
     },
     {
       format: 'MCQ',
-      body: 'A paper mill receiving clerk checks a delivery of industrial strapping rolls invoiced at R350 per roll. The delivery note lists 60 rolls. A physical tally confirms only 52 rolls on the pallet. What monetary value must be recorded on the Discrepancy / Credit Request Note?',
-      additionalText: '🟢 Correct Answer: R2,800.\n📐 Calculation: Step 1: 60 invoiced - 52 received = 8 missing rolls. Step 2: 8 rolls x R350 = R2,800 discrepancy claim value.\n📝 Distractor Review: R21,000 is total invoice value; R18,200 is accepted stock value; R3,500 assumes 10 missing rolls.',
-      options: ['R2,800', 'R21,000', 'R18,200', 'R3,500'],
+      body: 'If an employee splashes corrosive battery acid or industrial solvent into their eyes, what is the mandatory immediate emergency eyewash protocol?',
+      additionalText: '🟢 Model Answer:\nThe statutory emergency protocol is: (1) Flush eyes immediately at the emergency eyewash station for a continuous minimum of 15 minutes with eyelids held open, (2) Call for first aider assistance immediately, and (3) Retrieve the chemical Safety Data Sheet (SDS) and transfer for professional medical care.\n\n📝 How the Assessor Marks This:\n• 1 Mark for 15 minutes continuous flushing standard.\n• 1 Mark for retrieving SDS and seeking medical attention.',
+      options: [
+        'Flush eyes continuously for a minimum of 15 minutes at eyewash station, notify first aider, and seek medical attention with the SDS',
+        'Rinse eyes for 30 seconds and resume work',
+        'Rub eyes vigorously with dry cotton towels',
+        'Apply neutralising vinegar drops directly into the eyes',
+      ],
       correctOptions: [0],
+      duration: 45,
+      marks: 2,
+      guideTopicHint: 'Cluster 2.4 • Emergency Eyewash & Chemical SDS',
+    },
+    {
+      format: 'BINARY',
+      body: 'True or False: Standard warehouse safety operating procedures permit pallets to be stacked up to 5 tiers high on open warehouse floor space without racking bays.',
+      additionalText: '🟢 Model Answer:\nFalse. Pallets must never be stacked more than 3 tiers high on open floors unless locked within calibrated drive-in racking bays to prevent catastrophic collapse and crush hazards.\n\n📝 How the Assessor Marks This:\n• 1 Mark for False and citing 3 tiers maximum floor stacking limit.',
+      options: ['True', 'False'],
+      correctOptions: [1],
+      duration: 30,
+      guideTopicHint: 'Cluster 2.4 • Pallet Stacking Limits',
+    },
+    {
+      format: 'MCQ',
+      body: 'Which fire extinguisher type is strictly prohibited for use on an energized electrical distribution board fire?',
+      additionalText: '🟢 Model Answer:\nWater / Hydrant fire extinguishers conduct electricity back through the stream, causing fatal electrocution. Only Class C / CO2 or Dry Chemical Powder extinguishers are safe for electrical fires.\n\n📝 How the Assessor Marks This:\n• 1 Mark for Water / Hydrant extinguisher prohibition.',
+      options: [
+        'Water / Hydrant Extinguisher (causes fatal electrocution)',
+        'Carbon Dioxide (CO2) Extinguisher',
+        'Dry Chemical Powder (DCP) Extinguisher',
+        'Fire Suppression Blanket',
+      ],
+      correctOptions: [0],
+      duration: 45,
+      guideTopicHint: 'Cluster 2.4 • Warehouse Fire Safety',
+    },
+    {
+      format: 'MULTIPLE',
+      body: 'Which of the following are direct indicators of pest or vermin infestation in a warehouse storage area? (Select all that apply)',
+      additionalText: '🟢 Model Answer:\nOHS and hygiene audit indicators: Droppings along skirting boards/racking, gnawed cardboard corners or grain sacks, and shredded plastic/paper nesting materials require immediate quarantine and pest contractor escalation.\n\n📝 How the Assessor Marks This:\n• 1 Mark for droppings, gnawed corners, and nesting material.',
+      options: [
+        'Droppings along walls or underneath pallet racking',
+        'Gnawed corners on cardboard cartons or grain bags',
+        'Shredded shrink-wrap and paper nesting material in corners',
+        'Properly positioned ultrasonic pest repellent beacons',
+      ],
+      correctOptions: [0, 1, 2],
       duration: 60,
-      marks: 3,
-      guideTopicHint: 'Discrepancy Claim Valuation (KM-02, PM-03)'
-    }
-  ];
+      marks: 2,
+      guideTopicHint: 'Cluster 2.4 • Pest Contamination Protocols',
+    },
+  ],
+};
+
+export function getSampleOccupationalQuestions(
+  clusterKey: string = '1.1',
+  count: number = 6
+): AIGeneratedQuestion[] {
+  let matchedCluster = '1.1';
+  const numMatch = clusterKey.match(/(\d+\.\d+)/);
+  if (numMatch && FALLBACK_CLUSTER_POOLS[numMatch[1]]) {
+    matchedCluster = numMatch[1];
+  } else {
+    const lower = clusterKey.toLowerCase();
+    if (lower.includes('shrinkage') || lower.includes('loss')) matchedCluster = '1.2';
+    else if (lower.includes('check') || lower.includes('receiving') || lower.includes('variance')) matchedCluster = '1.3';
+    else if (lower.includes('dispatch stock') || lower.includes('picking')) matchedCluster = '2.1';
+    else if (lower.includes('record') || lower.includes('mhe') || lower.includes('equipment')) matchedCluster = '2.2';
+    else if (lower.includes('pack') || lower.includes('label') || lower.includes('courier')) matchedCluster = '2.3';
+    else if (lower.includes('housekeep') || lower.includes('safety') || lower.includes('clearance')) matchedCluster = '2.4';
+    else if (lower.includes('environment') || lower.includes('cold')) matchedCluster = '1.1';
+  }
+
+  const pool = FALLBACK_CLUSTER_POOLS[matchedCluster] || FALLBACK_CLUSTER_POOLS['1.1'];
 
   if (count <= pool.length) {
     return pool.slice(0, count);
@@ -346,7 +649,7 @@ export async function generateQuestionsWithGemini(
 
   if (!apiKey || apiKey.trim() === '' || apiKey.includes('your-gemini')) {
     console.warn('No Gemini API key provided. Using rich occupational curriculum fallback questions.');
-    return getSampleOccupationalQuestions(request.clusterTitle || request.prompt, count);
+    return getSampleOccupationalQuestions(request.clusterNumber || request.clusterTitle || request.prompt, count);
   }
 
   // Parallel distinct-angle batching for large pools (e.g. 60-question BrainCert bank -> 3x20)
@@ -440,6 +743,19 @@ YOUR OBJECTIVE: Generate high-impact live polling and quiz questions for adult w
 
 ${bloomDirective}
 
+STRICT CLUSTER & TOPIC ISOLATION MANDATE:
+You are generating assessment questions EXCLUSIVELY for Cluster ${request.clusterNumber || ''}: "${request.clusterTitle || ''}".
+- Scope & Topics: ${request.clusterDescription || 'Focus only on the defined topics of this cluster'}
+- Mapped Criteria / IACs: ${request.mappedIacs || 'Relevant Integrated Assessment Criteria for this cluster'}
+- Primary Focus Area: ${request.eisaFocusArea || request.clusterTitle || ''}
+
+NEGATIVE CONSTRAINT:
+NEVER generate questions belonging to other qualification clusters or modules!
+- If Cluster 2.2 (Principles for Recording Dispatches / MHE): ONLY test MHE selection (Forklifts, Reach Trucks, Trolleys), 3-step Faulty Equipment Protocol (STOP, TAG OUT, REPORT), dispatch register matching, and driver verification signatures. DO NOT generate cold-chain receiving questions (Cluster 1.1) or warehouse housekeeping/spill questions (Cluster 2.4).
+- If Cluster 2.4 (Housekeeping): ONLY test 1.2m DB clearance perimeters, Clean-As-You-Go, liquid spill containment, chemical SDS / eyewash stations, and pest prevention. DO NOT generate receiving variance calculations or dispatch documentation.
+- If Cluster 1.1 (Receiving & Dispatch Environment): ONLY test cold chain core receiving temperatures (+4°C), 30-min dock dwell rule, supply chain role players, 3PL providers, and warehousing vs cross-docking.
+- Every question's "guideTopicHint" MUST be formatted as: "Cluster ${request.clusterNumber || 'X.Y'} • [Specific Topic Element]".
+
 CRITICAL FRAMING RULES & STEM VARIETY:
 1. BALANCED STEM DISTRIBUTION (Do NOT force every question to cite the Learner Guide):
    - ~30-35% Learner Guide Reference: Prompt learners to navigate their physical/digital guide or SOPs ("According to your Learner Guide, what is...", "In Section 2 of your guide, which symbol...").
@@ -463,7 +779,16 @@ Return ONLY a valid JSON array of question objects adhering strictly to the resp
     contextParts.push(`COURSE: ${request.courseCode || ''} - ${request.courseTitle || 'Occupational Training'}`);
   }
   if (request.clusterNumber || request.clusterTitle) {
-    contextParts.push(`CLUSTER / MODULE: Cluster ${request.clusterNumber || ''} - ${request.clusterTitle || 'Core Competency'}`);
+    contextParts.push(`TARGET CLUSTER: Cluster ${request.clusterNumber || ''} — ${request.clusterTitle || 'Core Competency'}`);
+    if (request.clusterDescription) {
+      contextParts.push(`CLUSTER SCOPE & TOPICS: ${request.clusterDescription}`);
+    }
+    if (request.mappedIacs) {
+      contextParts.push(`MAPPED IAC / AAC ASSESSMENT CRITERIA: ${request.mappedIacs}`);
+    }
+    if (request.eisaFocusArea) {
+      contextParts.push(`PRIMARY EISA FOCUS AREA: ${request.eisaFocusArea}`);
+    }
   }
 
   if (request.courseContext && request.courseContext.trim()) {
@@ -492,10 +817,10 @@ Return ONLY a valid JSON array of question objects adhering strictly to the resp
     contextParts.push(`\n=== 6. FSA MOCK EXAM SIMULATION MANDATE ===\nTarget all official Integrated Assessment Criteria (IAC) for this cluster. Include realistic numerical scenarios, South African regulatory standards (such as statutory 15% VAT for dispatch calculations), and concrete equipment/packaging decisions.`);
   }
 
-  const promptText = `Generate exactly ${count} live assessment questions based on the provided curriculum and notebook extracts.
+  const promptText = `Generate exactly ${count} live assessment questions based EXCLUSIVELY on the target cluster curriculum and outcomes.
 ${contextParts.join('\n\n')}
 
-Ensure each question connects the official Curriculum outcomes to the practical Formative Assessment activities.`;
+Ensure each question connects the official Curriculum outcomes for Cluster ${request.clusterNumber || ''} to practical Formative Assessment activities, strictly avoiding content from other clusters.`;
 
   // Strict structured JSON response schema
   const responseSchema = {
@@ -618,5 +943,5 @@ Ensure each question connects the official Curriculum outcomes to the practical 
   }
 
   console.error('All Gemini Flash models in cascade failed. Falling back to preloaded occupational question bank.');
-  return getSampleOccupationalQuestions(request.clusterTitle || request.prompt, count);
+  return getSampleOccupationalQuestions(request.clusterNumber || request.clusterTitle || request.prompt, count);
 }

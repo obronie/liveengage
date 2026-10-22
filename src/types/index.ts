@@ -174,6 +174,9 @@ export interface GenerateQuestionsRequest {
   courseTitle?: string;
   clusterNumber?: string;
   clusterTitle?: string;
+  clusterDescription?: string;
+  mappedIacs?: string;
+  eisaFocusArea?: string;
   courseContext?: string; // Curriculum framework text
   // Modular NotebookLM extracts
   rawNotebookExtract?: string;
