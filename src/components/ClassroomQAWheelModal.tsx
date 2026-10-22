@@ -299,6 +299,9 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
   // Full-screen state
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // Classroom Projector Font Size Mode ('normal' | 'large' | 'xl')
+  const [fontSizeMode, setFontSizeMode] = useState<'normal' | 'large' | 'xl'>('normal');
+
   // Active question index
   const [currentQIndex, setCurrentQIndex] = useState(0);
 
@@ -384,7 +387,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       const height = canvas.height;
       const centerX = width / 2;
       const centerY = height / 2;
-      const radius = Math.min(centerX, centerY) - 18;
+      const radius = Math.min(centerX, centerY) - 22;
 
       ctx.clearRect(0, 0, width, height);
 
@@ -431,20 +434,20 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
         ctx.fillStyle = '#FFFFFF';
 
         let displayName = items[i];
-        if (numSlices > 16 && displayName.length > 12) {
-          displayName = displayName.substring(0, 11) + '…';
-        } else if (displayName.length > 16) {
-          displayName = displayName.substring(0, 15) + '…';
+        if (numSlices > 16 && displayName.length > 15) {
+          displayName = displayName.substring(0, 14) + '…';
+        } else if (displayName.length > 20) {
+          displayName = displayName.substring(0, 19) + '…';
         }
 
         ctx.font =
           numSlices > 18
-            ? 'bold 9.5px system-ui, -apple-system, sans-serif'
-            : 'bold 11px system-ui, -apple-system, sans-serif';
+            ? 'bold 10px system-ui, -apple-system, sans-serif'
+            : 'bold 12px system-ui, -apple-system, sans-serif';
 
         ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
         ctx.shadowBlur = 2.5;
-        ctx.fillText(displayName, radius - 14, 0);
+        ctx.fillText(displayName, radius - 16, 0);
         ctx.restore();
       }
 
@@ -452,7 +455,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       ctx.beginPath();
       ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
       ctx.strokeStyle = '#1F3864';
-      ctx.lineWidth = 4;
+      ctx.lineWidth = 4.5;
       ctx.stroke();
 
       // Outer Rim Mechanical Pegs
@@ -462,37 +465,37 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
         const pegY = centerY + radius * Math.sin(pegA);
 
         ctx.beginPath();
-        ctx.arc(pegX, pegY, 2.5, 0, 2 * Math.PI);
+        ctx.arc(pegX, pegY, 3.0, 0, 2 * Math.PI);
         ctx.fillStyle = '#FFFFFF';
         ctx.fill();
         ctx.strokeStyle = '#1F3864';
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = 1.3;
         ctx.stroke();
 
         ctx.beginPath();
-        ctx.arc(pegX, pegY, 1.2, 0, 2 * Math.PI);
+        ctx.arc(pegX, pegY, 1.4, 0, 2 * Math.PI);
         ctx.fillStyle = '#00B0F0';
         ctx.fill();
       }
 
       // Center Hub Outer White Ring
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 30, 0, 2 * Math.PI);
+      ctx.arc(centerX, centerY, 36, 0, 2 * Math.PI);
       ctx.fillStyle = '#FFFFFF';
       ctx.fill();
       ctx.strokeStyle = '#1F3864';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 3.5;
       ctx.stroke();
 
       // Center Hub Inner Cyan Ring
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 23, 0, 2 * Math.PI);
+      ctx.arc(centerX, centerY, 28, 0, 2 * Math.PI);
       ctx.fillStyle = '#00B0F0';
       ctx.fill();
 
       // Center Hub "SPIN" Text
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = '900 10.5px system-ui, sans-serif';
+      ctx.font = '900 12px system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.shadowBlur = 0;
@@ -504,9 +507,9 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       ctx.rotate(flapperAngle);
 
       ctx.beginPath();
-      ctx.moveTo(-9, -6);
-      ctx.quadraticCurveTo(-6, 11, 0, 24);
-      ctx.quadraticCurveTo(6, 11, 9, -6);
+      ctx.moveTo(-11, -7);
+      ctx.quadraticCurveTo(-7, 13, 0, 27);
+      ctx.quadraticCurveTo(7, 13, 11, -7);
       ctx.closePath();
 
       ctx.fillStyle = '#EF4444'; // Bold Red
@@ -517,15 +520,15 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
 
       // Needle center spine highlight
       ctx.beginPath();
-      ctx.moveTo(0, -5);
-      ctx.lineTo(0, 21);
+      ctx.moveTo(0, -6);
+      ctx.lineTo(0, 24);
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.lineWidth = 1.2;
+      ctx.lineWidth = 1.3;
       ctx.stroke();
 
       // Hinge Pin
       ctx.beginPath();
-      ctx.arc(0, -4, 4.5, 0, 2 * Math.PI);
+      ctx.arc(0, -5, 5.0, 0, 2 * Math.PI);
       ctx.fillStyle = '#1F3864';
       ctx.fill();
       ctx.strokeStyle = '#FFFFFF';
@@ -533,7 +536,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       ctx.stroke();
 
       ctx.beginPath();
-      ctx.arc(0, -4, 2, 0, 2 * Math.PI);
+      ctx.arc(0, -5, 2.2, 0, 2 * Math.PI);
       ctx.fillStyle = '#00B0F0';
       ctx.fill();
 
@@ -582,8 +585,8 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
     // Slight random jitter inside slice
     const jitter = (Math.random() - 0.5) * (sliceAngle * 0.7);
 
-    // 6 to 9 full spins for ~3.2 seconds brisk classroom pacing
-    const fullSpins = (7 + Math.floor(Math.random() * 3)) * 2 * Math.PI;
+    // 8 to 11 full spins for suspenseful classroom pacing
+    const fullSpins = (8 + Math.floor(Math.random() * 3)) * 2 * Math.PI;
     const currentAngleNorm = currentAngleRef.current % (2 * Math.PI);
 
     let targetAngle =
@@ -594,15 +597,15 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
 
     const startAngle = currentAngleRef.current;
     const totalDistance = targetAngle - startAngle;
-    const duration = 3200; // ~3.2 seconds
+    const duration = 4800; // ~4.8 seconds (50% longer than 3.2s)
     const startTime = performance.now();
 
     const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
 
-      // Quartic ease-out deceleration curve
-      const easeOut = 1 - Math.pow(1 - progress, 3.8);
+      // Deceleration curve: power 4.2 provides a long, suspenseful final creep across the last few pegs
+      const easeOut = 1 - Math.pow(1 - progress, 4.2);
       const angle = startAngle + totalDistance * easeOut;
       currentAngleRef.current = angle;
 
@@ -613,14 +616,14 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       if (fractional < 0) fractional += 1;
 
       let targetBend = 0;
-      if (fractional >= 0.86) {
-        const penetration = (fractional - 0.86) / 0.14;
-        targetBend = penetration * 0.42; // bend needle tip up to ~24 degrees
+      if (fractional >= 0.84) {
+        const penetration = (fractional - 0.84) / 0.16;
+        targetBend = penetration * 0.44; // bend needle tip up to ~25 degrees
       }
 
       if (currentPegIndex !== lastPegPassedRef.current) {
         lastPegPassedRef.current = currentPegIndex;
-        recoilVelocityRef.current = -0.28;
+        recoilVelocityRef.current = -0.30;
         if (soundEnabled) {
           audioSynthesizer.playTick();
         }
@@ -630,7 +633,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       recoilVelocityRef.current *= 0.72;
       flapperAngleRef.current += recoilVelocityRef.current;
 
-      if (fractional >= 0.86) {
+      if (fractional >= 0.84) {
         flapperAngleRef.current = Math.max(flapperAngleRef.current, targetBend);
       }
 
@@ -806,6 +809,122 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
     return `In South African logistics and warehousing operations, selecting "${correctText}" enforces standard operating procedures, audit compliance, and workplace safety.`;
   };
 
+  // Dynamic font size classes for classroom projector readability
+  const fontSizeClasses = useMemo(() => {
+    switch (fontSizeMode) {
+      case 'xl':
+        return {
+          stem: 'text-xl sm:text-2xl md:text-3xl',
+          options: 'text-base sm:text-lg md:text-xl',
+          optionLetter: 'w-8 h-8 text-sm',
+          optionPadding: 'py-3.5 px-4',
+          respondent: 'text-base sm:text-lg md:text-xl',
+          explanation: 'text-sm sm:text-base md:text-lg',
+        };
+      case 'large':
+        return {
+          stem: 'text-lg sm:text-xl md:text-2xl',
+          options: 'text-sm sm:text-base md:text-lg',
+          optionLetter: 'w-7 h-7 text-xs sm:text-sm',
+          optionPadding: 'py-3 px-3.5',
+          respondent: 'text-sm sm:text-base md:text-lg',
+          explanation: 'text-xs sm:text-sm md:text-base',
+        };
+      case 'normal':
+      default:
+        return {
+          stem: 'text-base sm:text-lg md:text-xl',
+          options: 'text-xs sm:text-sm md:text-base',
+          optionLetter: 'w-7 h-7 text-xs',
+          optionPadding: 'py-2.5 px-3',
+          respondent: 'text-sm sm:text-base',
+          explanation: 'text-xs sm:text-sm',
+        };
+    }
+  }, [fontSizeMode]);
+
+  // Renders question stem with explicit bracketed blanks [1] and underline indicator for CLOZE/Fill-in-the-gap
+  const renderQuestionStem = (
+    rawBody: string,
+    revealed: boolean,
+    q: Question,
+    sizeClass: string
+  ) => {
+    const hasClozeMarkers = /(\[\d+\]|___+|\[blank\])/i.test(rawBody) || q.format === 'CLOZE';
+
+    if (!hasClozeMarkers) {
+      return (
+        <h1 className={`${sizeClass} font-bold text-[#1F3864] leading-snug`}>
+          {rawBody}
+        </h1>
+      );
+    }
+
+    let normalized = rawBody;
+    let counter = 1;
+    // If underscores or [blank] exist, replace sequentially with [1], [2], etc.
+    if (!/\[\d+\]/.test(normalized) && /(_{2,}|\[blank\])/i.test(normalized)) {
+      normalized = normalized.replace(/(_{2,}|\[blank\])/gi, () => `[${counter++}]`);
+    } else if (q.format === 'CLOZE' && !/\[\d+\]/.test(normalized)) {
+      // If marked as CLOZE format but missing gap syntax, append [1]
+      normalized = `${normalized} [1]`;
+    }
+
+    const parts = normalized.split(/(\[\d+\])/g);
+
+    return (
+      <h1 className={`${sizeClass} font-bold text-[#1F3864] leading-relaxed`}>
+        {parts.map((part, pIdx) => {
+          const match = part.match(/^\[(\d+)\]$/);
+          if (!match) {
+            return <span key={pIdx}>{part}</span>;
+          }
+
+          const gapNum = parseInt(match[1], 10);
+          const gapIndex = gapNum - 1;
+
+          let correctWord = '';
+          if (q.options && q.options.length > 0) {
+            const optIdx =
+              q.correct_options && q.correct_options[gapIndex] !== undefined
+                ? q.correct_options[gapIndex]
+                : (q.correct_options?.[0] ?? 0);
+            correctWord = q.options[optIdx] || '';
+          }
+
+          if (revealed && correctWord) {
+            return (
+              <span
+                key={pIdx}
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 mx-1.5 rounded-lg bg-emerald-100 border-2 border-emerald-500 text-emerald-950 font-black shadow-2xs align-baseline animate-in zoom-in-95 duration-200"
+              >
+                <span className="w-5 h-5 rounded-md bg-emerald-600 text-white font-mono text-xs flex items-center justify-center shrink-0">
+                  {gapNum}
+                </span>
+                <span className="underline decoration-emerald-600 decoration-2">{correctWord}</span>
+              </span>
+            );
+          }
+
+          return (
+            <span
+              key={pIdx}
+              className="inline-flex items-baseline gap-1.5 px-2 py-0.5 mx-1 rounded-md bg-sky-50 border border-sky-200 align-baseline"
+            >
+              <span className="font-mono font-black text-[#00B0F0] text-xs sm:text-sm bg-white px-1.5 py-0.5 rounded border border-sky-200 shadow-2xs">
+                [{gapNum}]
+              </span>
+              <span
+                className="inline-block border-b-2 border-[#1F3864] min-w-[65px] sm:min-w-[95px] h-3.5 mb-0.5"
+                title={`Gap ${gapNum}: 1 word required`}
+              />
+            </span>
+          );
+        })}
+      </h1>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-[#F8FAFC] text-slate-900 flex flex-col overflow-hidden font-sans select-none">
       {/* Celebration Fireworks & Confetti Overlay */}
@@ -854,6 +973,46 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
           >
             {soundEnabled ? <Volume2 className="w-4 h-4 text-[#00B0F0]" /> : <VolumeX className="w-4 h-4 text-slate-400" />}
           </button>
+
+          {/* Classroom Projector Font Size Control */}
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-300" title="Classroom Projector Font Size">
+            <button
+              type="button"
+              onClick={() => setFontSizeMode('normal')}
+              className={`px-2 py-1 text-xs font-bold rounded-lg transition-all ${
+                fontSizeMode === 'normal'
+                  ? 'bg-white text-[#1F3864] shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Standard Font Size"
+            >
+              A
+            </button>
+            <button
+              type="button"
+              onClick={() => setFontSizeMode('large')}
+              className={`px-2 py-1 text-xs font-bold rounded-lg transition-all ${
+                fontSizeMode === 'large'
+                  ? 'bg-[#00B0F0] text-white shadow-xs font-black'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Large Projector Font"
+            >
+              A+
+            </button>
+            <button
+              type="button"
+              onClick={() => setFontSizeMode('xl')}
+              className={`px-2 py-1 text-xs font-bold rounded-lg transition-all ${
+                fontSizeMode === 'xl'
+                  ? 'bg-[#1F3864] text-white shadow-xs font-black'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Extra Large Projector Font"
+            >
+              A++
+            </button>
+          </div>
 
           {/* Remove Learner Checkbox Toggle */}
           <label className="hidden md:flex items-center gap-1.5 text-xs font-semibold text-slate-700 cursor-pointer select-none bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200">
@@ -911,24 +1070,13 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
         {/* ================================================================== */}
         <section className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-between shadow-xs min-h-0">
           
-          {/* Wheel Title & Active Responder Pill */}
-          <div className="w-full text-center space-y-0.5 shrink-0">
-            <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-50 text-[#00B0F0] border border-sky-200">
-              <RotateCw className="w-2.5 h-2.5 animate-spin text-[#00B0F0]" />
-              <span>Interactive Classroom Wheel</span>
-            </div>
-            <h3 className="text-xs sm:text-sm font-bold text-[#1F3864]">
-              Spin to Choose Responder
-            </h3>
-          </div>
-
-          {/* HTML5 Canvas Wheel (270x270 Compact Height) */}
-          <div className="relative my-0.5 flex items-center justify-center shrink-0">
+          {/* HTML5 Canvas Wheel (Enlarged 360x360 with White Card Integration) */}
+          <div className="relative my-auto flex items-center justify-center shrink-0 py-1">
             <canvas
               ref={canvasRef}
-              width={270}
-              height={270}
-              className="max-w-full h-auto drop-shadow-sm cursor-pointer select-none"
+              width={360}
+              height={360}
+              className="max-w-full h-auto drop-shadow-md cursor-pointer select-none"
               onClick={handleSpinWheel}
             />
           </div>
@@ -945,7 +1093,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
               <div className="text-[10px] font-bold uppercase tracking-wider text-cyan-200">
                 Current Respondent
               </div>
-              <div className="text-sm sm:text-base font-black mt-0.5 truncate">
+              <div className={`${fontSizeClasses.respondent} font-black mt-0.5 truncate`}>
                 {selectedLearner ? (
                   <span className="flex items-center justify-center gap-1.5">
                     <span>🎤 {selectedLearner}</span>
@@ -1008,11 +1156,17 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
                     )}
                   </div>
 
-                  {/* High-Contrast Question Stem */}
-                  <h1 className="text-base sm:text-lg md:text-xl font-bold text-[#1F3864] leading-snug">
-                    {currentQuestion.body}
-                  </h1>
+                  {/* High-Contrast Question Stem with CLOZE Bracketed Underline Support */}
+                  {renderQuestionStem(currentQuestion.body, isRevealed, currentQuestion, fontSizeClasses.stem)}
                 </div>
+
+                {/* CLOZE Word Bank Prompt Banner */}
+                {currentQuestion.format === 'CLOZE' && (
+                  <div className="mt-2.5 px-3 py-1.5 rounded-xl bg-sky-50 border border-sky-200 text-[#00B0F0] flex items-center gap-1.5 text-xs font-bold">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Word Bank — Select the correct term to complete the passage:</span>
+                  </div>
+                )}
 
                 {/* Interactive Options Cards */}
                 <div className="space-y-2 mt-2.5">
@@ -1067,13 +1221,13 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
                           type="button"
                           onClick={() => handleSelectOption(idx)}
                           disabled={isRevealed}
-                          className={`w-full py-2.5 px-3 rounded-xl border-2 text-left transition-all flex items-start gap-3 cursor-pointer disabled:cursor-default ${cardStyle}`}
+                          className={`w-full ${fontSizeClasses.optionPadding} rounded-xl border-2 text-left transition-all flex items-start gap-3 cursor-pointer disabled:cursor-default ${cardStyle}`}
                         >
-                          <div className={`w-7 h-7 rounded-lg font-bold flex items-center justify-center shrink-0 text-xs ${letterStyle}`}>
+                          <div className={`${fontSizeClasses.optionLetter} rounded-lg font-bold flex items-center justify-center shrink-0 ${letterStyle}`}>
                             {letter}
                           </div>
                           <div className="flex-1 min-w-0 pt-0.5">
-                            <p className="text-xs sm:text-sm md:text-base font-medium leading-normal">
+                            <p className={`${fontSizeClasses.options} font-medium leading-normal`}>
                               {opt}
                             </p>
                           </div>
@@ -1108,7 +1262,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                         <span>✓ Model Explanation & Rationale:</span>
                       </div>
-                      <p className="text-xs sm:text-sm leading-relaxed text-emerald-900 whitespace-pre-line">
+                      <p className={`${fontSizeClasses.explanation} leading-relaxed text-emerald-900 whitespace-pre-line`}>
                         {getExplanationText()}
                       </p>
                     </div>
@@ -1119,14 +1273,14 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
                         <Award className="w-4 h-4 text-amber-600 shrink-0" />
                         <span>Key Learning Takeaway & Correct Answer:</span>
                       </div>
-                      <div className="text-xs sm:text-sm font-semibold text-amber-950">
+                      <div className={`${fontSizeClasses.explanation} font-semibold text-amber-950`}>
                         Correct Answer:{' '}
                         <span className="font-bold underline decoration-amber-500">
                           Option {String.fromCharCode(65 + (currentQuestion.correct_options[0] ?? 0))}:{' '}
                           {currentQuestion.options[currentQuestion.correct_options[0] ?? 0]}
                         </span>
                       </div>
-                      <p className="text-xs sm:text-sm leading-relaxed text-amber-900 whitespace-pre-line">
+                      <p className={`${fontSizeClasses.explanation} leading-relaxed text-amber-900 whitespace-pre-line`}>
                         {getExplanationText()}
                       </p>
                     </div>
