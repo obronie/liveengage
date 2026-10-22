@@ -375,6 +375,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
 
   // ==========================================================================
   // Wheel Canvas Rendering (White Background + iLearn Palette + Red Needle)
+  // Double-sized high-DPI canvas (720x720) for large classroom visibility
   // ==========================================================================
   const drawWheel = useCallback(
     (angle: number, flapperAngle: number) => {
@@ -387,7 +388,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       const height = canvas.height;
       const centerX = width / 2;
       const centerY = height / 2;
-      const radius = Math.min(centerX, centerY) - 22;
+      const radius = Math.min(centerX, centerY) - 38;
 
       ctx.clearRect(0, 0, width, height);
 
@@ -398,7 +399,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       // Outer subtle shadow base
       ctx.save();
       ctx.beginPath();
-      ctx.arc(centerX, centerY, radius + 4, 0, 2 * Math.PI);
+      ctx.arc(centerX, centerY, radius + 6, 0, 2 * Math.PI);
       ctx.fillStyle = '#E2E8F0';
       ctx.fill();
       ctx.restore();
@@ -422,10 +423,10 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
 
         // Clean white separator line
         ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
         ctx.stroke();
 
-        // Radial Learner Name Text
+        // Radial Learner Name Text (Enlarged for classroom distance reading)
         ctx.save();
         ctx.translate(centerX, centerY);
         ctx.rotate(startA + sliceAngle / 2);
@@ -434,109 +435,109 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
         ctx.fillStyle = '#FFFFFF';
 
         let displayName = items[i];
-        if (numSlices > 16 && displayName.length > 15) {
-          displayName = displayName.substring(0, 14) + '…';
-        } else if (displayName.length > 20) {
+        if (numSlices > 16 && displayName.length > 20) {
           displayName = displayName.substring(0, 19) + '…';
+        } else if (displayName.length > 26) {
+          displayName = displayName.substring(0, 25) + '…';
         }
 
         ctx.font =
           numSlices > 18
-            ? 'bold 10px system-ui, -apple-system, sans-serif'
-            : 'bold 12px system-ui, -apple-system, sans-serif';
+            ? 'bold 18px system-ui, -apple-system, sans-serif'
+            : 'bold 21px system-ui, -apple-system, sans-serif';
 
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-        ctx.shadowBlur = 2.5;
-        ctx.fillText(displayName, radius - 16, 0);
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+        ctx.shadowBlur = 4;
+        ctx.fillText(displayName, radius - 28, 0);
         ctx.restore();
       }
 
-      // Outer Rim Accent Ring in Navy
+      // Outer Rim Accent Ring in Navy (High Contrast)
       ctx.beginPath();
       ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
       ctx.strokeStyle = '#1F3864';
-      ctx.lineWidth = 4.5;
+      ctx.lineWidth = 8;
       ctx.stroke();
 
-      // Outer Rim Mechanical Pegs
+      // Outer Rim Mechanical Pegs (Enlarged)
       for (let i = 0; i < numSlices; i++) {
         const pegA = angle + i * sliceAngle;
         const pegX = centerX + radius * Math.cos(pegA);
         const pegY = centerY + radius * Math.sin(pegA);
 
         ctx.beginPath();
-        ctx.arc(pegX, pegY, 3.0, 0, 2 * Math.PI);
+        ctx.arc(pegX, pegY, 5.5, 0, 2 * Math.PI);
         ctx.fillStyle = '#FFFFFF';
         ctx.fill();
         ctx.strokeStyle = '#1F3864';
-        ctx.lineWidth = 1.3;
+        ctx.lineWidth = 2.4;
         ctx.stroke();
 
         ctx.beginPath();
-        ctx.arc(pegX, pegY, 1.4, 0, 2 * Math.PI);
+        ctx.arc(pegX, pegY, 2.6, 0, 2 * Math.PI);
         ctx.fillStyle = '#00B0F0';
         ctx.fill();
       }
 
-      // Center Hub Outer White Ring
+      // Center Hub Outer White Ring (Enlarged)
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 36, 0, 2 * Math.PI);
+      ctx.arc(centerX, centerY, 70, 0, 2 * Math.PI);
       ctx.fillStyle = '#FFFFFF';
       ctx.fill();
       ctx.strokeStyle = '#1F3864';
-      ctx.lineWidth = 3.5;
+      ctx.lineWidth = 6;
       ctx.stroke();
 
       // Center Hub Inner Cyan Ring
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 28, 0, 2 * Math.PI);
+      ctx.arc(centerX, centerY, 54, 0, 2 * Math.PI);
       ctx.fillStyle = '#00B0F0';
       ctx.fill();
 
       // Center Hub "SPIN" Text
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = '900 12px system-ui, sans-serif';
+      ctx.font = '900 24px system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.shadowBlur = 0;
       ctx.fillText('SPIN', centerX, centerY);
 
-      // Flexible Red Needle Pointer at 12 o'clock (top center)
+      // Flexible Red Needle Pointer at 12 o'clock (top center, enlarged)
       ctx.save();
-      ctx.translate(centerX, centerY - radius - 2);
+      ctx.translate(centerX, centerY - radius - 4);
       ctx.rotate(flapperAngle);
 
       ctx.beginPath();
-      ctx.moveTo(-11, -7);
-      ctx.quadraticCurveTo(-7, 13, 0, 27);
-      ctx.quadraticCurveTo(7, 13, 11, -7);
+      ctx.moveTo(-18, -12);
+      ctx.quadraticCurveTo(-12, 22, 0, 48);
+      ctx.quadraticCurveTo(12, 22, 18, -12);
       ctx.closePath();
 
       ctx.fillStyle = '#EF4444'; // Bold Red
       ctx.fill();
       ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 3.5;
       ctx.stroke();
 
       // Needle center spine highlight
       ctx.beginPath();
-      ctx.moveTo(0, -6);
-      ctx.lineTo(0, 24);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.lineWidth = 1.3;
+      ctx.moveTo(0, -10);
+      ctx.lineTo(0, 42);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+      ctx.lineWidth = 2.2;
       ctx.stroke();
 
       // Hinge Pin
       ctx.beginPath();
-      ctx.arc(0, -5, 5.0, 0, 2 * Math.PI);
+      ctx.arc(0, -8, 8.5, 0, 2 * Math.PI);
       ctx.fillStyle = '#1F3864';
       ctx.fill();
       ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 2.5;
       ctx.stroke();
 
       ctx.beginPath();
-      ctx.arc(0, -5, 2.2, 0, 2 * Math.PI);
+      ctx.arc(0, -8, 3.8, 0, 2 * Math.PI);
       ctx.fillStyle = '#00B0F0';
       ctx.fill();
 
@@ -1066,17 +1067,17 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       <main className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 p-2.5 sm:p-3.5 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
         
         {/* ================================================================== */}
-        {/* LEFT COLUMN: Spinning Name Wheel (5 Columns)                       */}
+        {/* LEFT COLUMN: Spinning Name Wheel (Enlarged 6 Columns)               */}
         {/* ================================================================== */}
-        <section className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-between shadow-xs min-h-0">
+        <section className="lg:col-span-6 bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-between shadow-xs min-h-0">
           
-          {/* HTML5 Canvas Wheel (Enlarged 360x360 with White Card Integration) */}
-          <div className="relative my-auto flex items-center justify-center shrink-0 py-1">
+          {/* HTML5 Canvas Wheel (Double-Sized 720x720 High-DPI Wheel) */}
+          <div className="relative my-auto flex items-center justify-center w-full shrink-0 py-1 flex-1 min-h-0">
             <canvas
               ref={canvasRef}
-              width={360}
-              height={360}
-              className="max-w-full h-auto drop-shadow-md cursor-pointer select-none"
+              width={720}
+              height={720}
+              className="w-full max-w-[500px] sm:max-w-[560px] lg:max-w-[620px] xl:max-w-[700px] max-h-[50vh] sm:max-h-[56vh] lg:max-h-[64vh] aspect-square object-contain drop-shadow-xl cursor-pointer select-none transition-transform hover:scale-[1.01] active:scale-[0.99]"
               onClick={handleSpinWheel}
             />
           </div>
@@ -1133,9 +1134,9 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
         </section>
 
         {/* ================================================================== */}
-        {/* RIGHT COLUMN: Interactive Question & Answer Stage (7 Columns)     */}
+        {/* RIGHT COLUMN: Interactive Question & Answer Stage (6 Columns)      */}
         {/* ================================================================== */}
-        <section className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 flex flex-col justify-between shadow-xs min-h-0 overflow-y-auto">
+        <section className="lg:col-span-6 bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 flex flex-col justify-between shadow-xs min-h-0 overflow-y-auto">
           
           {currentQuestion ? (
             <div className="space-y-2.5 flex-1 min-h-0 flex flex-col justify-between">
