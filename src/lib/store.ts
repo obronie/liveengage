@@ -2204,17 +2204,31 @@ export class AppStore {
                 all[existingIdx].title = 'Generic Standard Assessment';
                 changed = true;
               }
-              // Sync marks & total_marks for standard sets if missing or expanded
+              // Sync marks, questions & metadata for standard seed sets if outdated or expanded
               if (
+                !all[existingIdx].is_custom ||
                 !all[existingIdx].total_marks || 
                 all[existingIdx].questions.length < initSet.questions.length || 
                 all[existingIdx].questions.some(q => !q.marks)
               ) {
-                all[existingIdx].questions = initSet.questions;
-                all[existingIdx].total_marks = initSet.total_marks;
-                all[existingIdx].time_allowed_minutes = initSet.time_allowed_minutes;
-                all[existingIdx].eisa_focus_area = initSet.eisa_focus_area;
-                changed = true;
+                // If it is a built-in standard set, ensure questions and hints match the updated isolated seed bank
+                if (!all[existingIdx].is_custom) {
+                  all[existingIdx].questions = initSet.questions;
+                  all[existingIdx].total_marks = initSet.total_marks;
+                  all[existingIdx].time_allowed_minutes = initSet.time_allowed_minutes;
+                  all[existingIdx].eisa_focus_area = initSet.eisa_focus_area;
+                  changed = true;
+                } else if (
+                  !all[existingIdx].total_marks || 
+                  all[existingIdx].questions.length < initSet.questions.length || 
+                  all[existingIdx].questions.some(q => !q.marks)
+                ) {
+                  all[existingIdx].questions = initSet.questions;
+                  all[existingIdx].total_marks = initSet.total_marks;
+                  all[existingIdx].time_allowed_minutes = initSet.time_allowed_minutes;
+                  all[existingIdx].eisa_focus_area = initSet.eisa_focus_area;
+                  changed = true;
+                }
               }
             }
           }
