@@ -1062,14 +1062,14 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
       {/* SPLIT-SCREEN MAIN STAGE                                              */}
       {/* ==================================================================== */}
       {/* ==================================================================== */}
-      {/* SPLIT-SCREEN MAIN STAGE (Compact No-Scroll Layout)                   */}
+      {/* SPLIT-SCREEN MAIN STAGE (40/60 Split, Compact No-Scroll Layout)      */}
       {/* ==================================================================== */}
-      <main className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 p-2.5 sm:p-3.5 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
+      <main className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4 p-2.5 sm:p-3.5 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
         
         {/* ================================================================== */}
-        {/* LEFT COLUMN: Spinning Name Wheel (Enlarged 6 Columns)               */}
+        {/* LEFT COLUMN: Spinning Name Wheel (40% Split: 2 of 5 Columns)       */}
         {/* ================================================================== */}
-        <section className="lg:col-span-6 bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-between shadow-xs min-h-0">
+        <section className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-between shadow-xs min-h-0">
           
           {/* HTML5 Canvas Wheel (Double-Sized 720x720 High-DPI Wheel) */}
           <div className="relative my-auto flex items-center justify-center w-full shrink-0 py-1 flex-1 min-h-0">
@@ -1077,7 +1077,7 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
               ref={canvasRef}
               width={720}
               height={720}
-              className="w-full max-w-[500px] sm:max-w-[560px] lg:max-w-[620px] xl:max-w-[700px] max-h-[50vh] sm:max-h-[56vh] lg:max-h-[64vh] aspect-square object-contain drop-shadow-xl cursor-pointer select-none transition-transform hover:scale-[1.01] active:scale-[0.99]"
+              className="w-full max-w-[420px] sm:max-w-[480px] lg:max-w-[520px] xl:max-w-[580px] max-h-[48vh] sm:max-h-[54vh] lg:max-h-[60vh] aspect-square object-contain drop-shadow-xl cursor-pointer select-none transition-transform hover:scale-[1.01] active:scale-[0.99]"
               onClick={handleSpinWheel}
             />
           </div>
@@ -1134,9 +1134,9 @@ export const ClassroomQAWheelModal: React.FC<ClassroomQAWheelModalProps> = ({
         </section>
 
         {/* ================================================================== */}
-        {/* RIGHT COLUMN: Interactive Question & Answer Stage (6 Columns)      */}
+        {/* RIGHT COLUMN: Interactive Question & Answer Stage (60%: 3 Columns)  */}
         {/* ================================================================== */}
-        <section className="lg:col-span-6 bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 flex flex-col justify-between shadow-xs min-h-0 overflow-y-auto">
+        <section className="lg:col-span-3 bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 flex flex-col justify-between shadow-xs min-h-0 overflow-y-auto">
           
           {currentQuestion ? (
             <div className="space-y-2.5 flex-1 min-h-0 flex flex-col justify-between">
