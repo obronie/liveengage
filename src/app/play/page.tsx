@@ -635,16 +635,84 @@ function ParticipantPlayContent() {
               </p>
             </div>
 
-            {session.facilitator_instructions && (
-              <div className="p-4 rounded-2xl bg-white border border-[#D5E3EF] text-xs text-slate-700 leading-relaxed font-medium shadow-xs">
-                &ldquo;{session.facilitator_instructions}&rdquo;
-              </div>
-            )}
+            {/* Dynamic Assessment Briefing & Instructions Card */}
+            {(() => {
+              const qCount = session.questions?.length || 0;
+              const isOverall = session.timing_mode === 'overall';
+              const isUntimed = session.timing_mode === 'untimed';
+              const isIndividual = session.entry_mode === 'individual';
+              const isSelfPaced = session.cohort_pacing === 'self_paced' || isOverall;
+              const durationText = isUntimed 
+                ? 'Untimed' 
+                : isOverall 
+                  ? `${session.overall_time_minutes || 20} min overall` 
+                  : `${session.per_question_duration || 45}s per question`;
 
-            <div className="p-4 rounded-2xl bg-[#D5E3EF]/40 border border-[#D5E3EF] text-xs text-slate-700 text-left">
-              <span className="text-[#4682B4] font-bold">📖 Facilitation Tip: </span>
-              Have your physical or digital Learner Guide open! Questions are structured to reward authentic navigation of SOP headings.
-            </div>
+              return (
+                <div className="bg-white border border-[#D5E3EF] rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5 text-left">
+                  {/* Assessment Parameters Badges */}
+                  <div className="flex flex-wrap items-center gap-1.5 pb-2 border-b border-slate-100">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-50 border border-sky-200 text-[#1e3a5f] text-xs font-bold">
+                      <BookOpen className="w-3.5 h-3.5 text-[#00B0F0]" />
+                      <span>{qCount} Questions</span>
+                    </span>
+
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold">
+                      <Clock className="w-3.5 h-3.5 text-amber-600" />
+                      <span>{durationText}</span>
+                    </span>
+
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold">
+                      {isIndividual ? <User className="w-3.5 h-3.5 text-[#4682B4]" /> : <Users className="w-3.5 h-3.5 text-emerald-600" />}
+                      <span>{isIndividual ? 'Individual Assessment' : 'Table Team Mode'}</span>
+                    </span>
+
+                    {isSelfPaced && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Self-Paced / Auto-Save</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Short Clear Instructions */}
+                  <div className="space-y-2 text-xs text-slate-700 leading-relaxed">
+                    <div className="flex items-start gap-2">
+                      <span className="font-black text-[#4682B4] shrink-0 mt-0.5">1.</span>
+                      <p>
+                        <strong>Open-Book Reference:</strong> Keep your physical or digital Learner Guide open. Questions reward authentic navigation of SOP headings, workplace scenarios, and calculations.
+                      </p>
+                    </div>
+
+                    <div className="flex items-start gap-2">
+                      <span className="font-black text-[#4682B4] shrink-0 mt-0.5">2.</span>
+                      <p>
+                        {isSelfPaced ? (
+                          <>
+                            <strong>Pacing & Navigation:</strong> You have <strong>{durationText}</strong> to complete all <strong>{qCount} questions</strong>. You can navigate freely forward and back using Previous/Next or the Question Palette. Your choices auto-save immediately.
+                          </>
+                        ) : isIndividual ? (
+                          <>
+                            <strong>Facilitator Pacing:</strong> Questions will advance on the projector screen. You have <strong>{durationText}</strong> to lock in your individual answer.
+                          </>
+                        ) : (
+                          <>
+                            <strong>Table Deliberation:</strong> Deliberate with your table group, reach consensus, and log your final team response before the timer ends.
+                          </>
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="flex items-start gap-2">
+                      <span className="font-black text-[#4682B4] shrink-0 mt-0.5">3.</span>
+                      <p>
+                        <strong>Scoring & Results:</strong> Immediate feedback, model answers, and assessor marking rubrics will be debriefed after submission.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             <p className="text-xs text-slate-400 italic animate-pulse">
               Waiting for facilitator to start the active question...
