@@ -51,6 +51,8 @@ export default function PresenterPage() {
 
   // Presenter view modes
   const [showLeaderboard, setShowLeaderboard] = useState<boolean>(false);
+  const [showAllRanks, setShowAllRanks] = useState<boolean>(false); // Discreet toggle to show full cohort vs Top 3 podium
+  const [selfPacedPreviewQIndex, setSelfPacedPreviewQIndex] = useState<number | null>(null); // Toggle to inspect question screen during self-paced mode
   const [showRationale, setShowRationale] = useState<boolean>(true); // Shared Classroom Debrief Card Toggle
   const [showAnsweredDropdown, setShowAnsweredDropdown] = useState<boolean>(false); // Top right answered tracker popover
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -76,7 +78,7 @@ export default function PresenterPage() {
 
         const currentQ = sess.questions?.[sess.current_question_index];
         if (currentQ) {
-          const rList = await AppStore.fetchResponses(sess.id, currentQ.id);
+          const rList = await AppStore.fetchResponses(sess.id);
           setResponses(rList);
           const hw = AppStore.getHiddenWords(currentQ.id);
           setHiddenWords(hw);
@@ -260,6 +262,33 @@ export default function PresenterPage() {
     }
   };
 
+  const handleToggleCohortPacing = async () => {
+    if (!session) return;
+    const nextPacing = session.cohort_pacing === 'self_paced' ? 'facilitator_paced' : 'self_paced';
+    const updated: Session = {
+      ...session,
+      cohort_pacing: nextPacing,
+    };
+    setSession(updated);
+    await AppStore.saveSession(updated);
+  };
+
+  const handleLockAndDebrief = async () => {
+    if (!session) return;
+    setIsTimerRunning(false);
+    setRevealMode(true);
+    const updated: Session = {
+      ...session,
+      status: 'revealed',
+      cohort_pacing: 'facilitator_paced',
+      current_question_index: 0,
+    };
+    setSession(updated);
+    setSelfPacedPreviewQIndex(null);
+    await AppStore.saveSession(updated);
+    confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+  };
+
   const handleStartFirstQuestion = async () => {
     if (!session || !session.questions || session.questions.length === 0) return;
     const firstQ = session.questions[0];
@@ -272,6 +301,7 @@ export default function PresenterPage() {
       ...session,
       status: 'question_active',
       current_question_index: 0,
+      cohort_pacing: session.cohort_pacing || (session.timing_mode === 'overall' ? 'self_paced' : 'facilitator_paced'),
       question_timer_end: (isUntimed || duration === 0) ? undefined : new Date(Date.now() + duration * 1000).toISOString(),
       overall_timer_end: isOverall ? new Date(Date.now() + overallSec * 1000).toISOString() : undefined,
     };
@@ -582,6 +612,9 @@ export default function PresenterPage() {
       } else if (e.key === 's' || e.key === 'S') {
         e.preventDefault();
         handleToggleLeaderboard();
+      } else if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        setShowAllRanks(prev => !prev);
       }
     };
 
@@ -719,6 +752,32 @@ export default function PresenterPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Cohort Pacing Mode Switch (Self-Paced Open Book vs Facilitator-Led) */}
+          {session.status !== 'lobby' && (
+            <button
+              type="button"
+              onClick={handleToggleCohortPacing}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-xs ${
+                session.cohort_pacing === 'self_paced'
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                  : 'bg-sky-500/20 text-sky-300 border-sky-500/40 hover:bg-sky-500/30'
+              }`}
+              title="Toggle Pacing: Self-Paced (Open Book & Guide Research) vs Facilitator-Led Synchronized"
+            >
+              {session.cohort_pacing === 'self_paced' ? (
+                <>
+                  <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>📖 Self-Paced Mode</span>
+                </>
+              ) : (
+                <>
+                  <Radio className="w-3.5 h-3.5 text-sky-400" />
+                  <span>🎯 Facilitator-Led</span>
+                </>
+              )}
+            </button>
+          )}
+
           {/* Live Answered Status Tracker on Top Right */}
           {session.status !== 'lobby' && (
             <div className="relative">
@@ -905,9 +964,197 @@ export default function PresenterPage() {
           </div>
         )}
 
-        {/* ACTIVE / LOCKED / REVEALED QUESTION STATE */}
-        {session.status !== 'lobby' && currentQuestion && (
+        {/* SELF-PACED LIVE COHORT COMPLETION DASHBOARD */}
+        {session.status === 'question_active' && session.cohort_pacing === 'self_paced' && selfPacedPreviewQIndex === null ? (
+          <div className="flex-1 min-h-0 flex flex-col justify-between py-2 space-y-4 animate-in fade-in duration-200">
+            {/* Top Row: Overall Timer & Assessment Badge */}
+            <div className="shrink-0 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-[#121b2d] border border-[#1e2e4a] p-4 rounded-2xl shadow-lg">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+                      <BookOpen className="w-3.5 h-3.5" />
+                      Open-Book Assessment Active
+                    </span>
+                    <span className="text-xs text-slate-400 font-semibold">
+                      {session.questions?.length || 0} Questions • Learners Answering at Their Own Pace
+                    </span>
+                  </div>
+                  <h2 className="text-lg sm:text-xl font-black text-white">
+                    Learner Guide Reference & Independent Drill
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Learners are actively consulting their physical/PDF guides, navigating questions, and auto-saving responses.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className={`px-5 py-2 rounded-2xl border font-mono font-black text-2xl sm:text-3xl flex items-center gap-2.5 shadow-xl ${timerColorClass}`}>
+                    <Clock className="w-6 h-6 animate-pulse" />
+                    <span>
+                      {Math.floor(timeLeft / 60).toString().padStart(2, '0')}:{(timeLeft % 60).toString().padStart(2, '0')}
+                    </span>
+                    <span className="text-[10px] uppercase font-sans tracking-widest opacity-80">Total</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cohort Completion Summary Strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {(() => {
+                  const totalQ = session.questions?.length || 1;
+                  const completedParticipants = participants.filter(p => {
+                    const answered = session.questions ? session.questions.filter(q => responses.some(r => r.question_id === q.id && r.participant_id === p.id)).length : 0;
+                    return answered >= totalQ;
+                  });
+                  const totalSubmissions = responses.length;
+                  const avgProgress = participants.length > 0 
+                    ? Math.round(participants.reduce((acc, p) => {
+                        const count = session.questions ? session.questions.filter(q => responses.some(r => r.question_id === q.id && r.participant_id === p.id)).length : 0;
+                        return acc + (count / totalQ);
+                      }, 0) / participants.length * 100)
+                    : 0;
+
+                  return (
+                    <>
+                      <div className="bg-[#121b2d]/80 border border-[#1e2e4a] p-3 rounded-xl">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Connected</span>
+                        <span className="text-lg font-black text-white">{participants.length} {session.entry_mode === 'group' ? 'Teams' : 'Learners'}</span>
+                      </div>
+                      <div className="bg-[#121b2d]/80 border border-[#1e2e4a] p-3 rounded-xl">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Fully Completed</span>
+                        <span className="text-lg font-black text-emerald-400">{completedParticipants.length} / {participants.length}</span>
+                      </div>
+                      <div className="bg-[#121b2d]/80 border border-[#1e2e4a] p-3 rounded-xl">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Cohort Progress</span>
+                        <span className="text-lg font-black text-[#4682B4]">{avgProgress}%</span>
+                      </div>
+                      <div className="bg-[#121b2d]/80 border border-[#1e2e4a] p-3 rounded-xl">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Logged Answers</span>
+                        <span className="text-lg font-black text-amber-300">{totalSubmissions}</span>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Middle: Live Learner Cards Grid */}
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {participants.length === 0 ? (
+                  <div className="col-span-full py-16 text-center text-slate-500 italic">
+                    Waiting for participants to join with PIN {roomCode}...
+                  </div>
+                ) : (
+                  participants.map((p) => {
+                    const totalQ = session.questions?.length || 1;
+                    const answeredCount = session.questions ? session.questions.filter(q => responses.some(r => r.question_id === q.id && r.participant_id === p.id)).length : 0;
+                    const pct = Math.round((answeredCount / totalQ) * 100);
+                    const isDone = answeredCount >= totalQ;
+
+                    return (
+                      <div
+                        key={p.id}
+                        className={`p-3.5 rounded-2xl border transition-all ${
+                          isDone
+                            ? 'bg-[#122238] border-emerald-500/50 shadow-md shadow-emerald-950/30'
+                            : 'bg-[#121b2d] border-[#1e2e4a]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs shrink-0 ${
+                              isDone ? 'bg-emerald-500 text-white' : 'bg-[#1e2e4a] text-slate-300'
+                            }`}>
+                              {isDone ? '✓' : answeredCount}
+                            </span>
+                            <span className="font-bold text-white text-sm truncate" title={p.display_name}>
+                              {p.display_name}
+                            </span>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${
+                            isDone 
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
+                              : 'bg-sky-500/15 text-sky-300 border border-sky-500/30'
+                          }`}>
+                            {isDone ? 'Complete' : `${totalQ - answeredCount} left`}
+                          </span>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="space-y-1">
+                          <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-[#1e2e4a]">
+                            <div
+                              className={`h-full transition-all duration-300 ${
+                                isDone ? 'bg-[#6DC082]' : 'bg-[#4682B4]'
+                              }`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
+                            <span>{answeredCount} of {totalQ} Answered</span>
+                            <span>{pct}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Bottom Actions Bar */}
+            <div className="shrink-0 pt-3 border-t border-[#1e2e4a] flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setSelfPacedPreviewQIndex(0)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl border border-slate-700 flex items-center gap-2 transition-colors cursor-pointer"
+                title="Inspect question screens while learners answer"
+              >
+                <Eye className="w-4 h-4 text-[#4682B4]" />
+                <span>Inspect Question View</span>
+              </button>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleToggleLeaderboard}
+                  className="px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Trophy className="w-4 h-4 text-amber-400" />
+                  <span>Leaderboard [S]</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleLockAndDebrief}
+                  className="px-5 py-2.5 bg-[#6DC082] hover:bg-[#5bb271] text-white text-xs sm:text-sm font-black rounded-xl shadow-lg shadow-[#6DC082]/25 flex items-center gap-2 transition-all cursor-pointer"
+                >
+                  <Lock className="w-4 h-4" />
+                  <span>Lock Submissions & Begin Classroom Debrief</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : session.status !== 'lobby' && currentQuestion && (
           <div className="flex-1 min-h-0 flex flex-col justify-between animate-in fade-in duration-200">
+            {/* Self-Paced Preview Mode Notice if Facilitator is peeking */}
+            {selfPacedPreviewQIndex !== null && session.cohort_pacing === 'self_paced' && (
+              <div className="mb-2 p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-between text-xs font-bold text-amber-200 shrink-0">
+                <div className="flex items-center gap-2">
+                  <Eye className="w-4 h-4 text-amber-400" />
+                  <span>Previewing Question Screen • Learners are answering independently in Self-Paced Mode</span>
+                </div>
+                <button
+                  onClick={() => setSelfPacedPreviewQIndex(null)}
+                  className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-lg text-xs transition-colors cursor-pointer"
+                >
+                  Return to Live Progress Board
+                </button>
+              </div>
+            )}
             {/* Top Row: Progress Bar & Timer */}
             <div className="shrink-0 space-y-2 sm:space-y-3">
               {/* Dynamic Smooth Progress Bar */}
@@ -1420,54 +1667,85 @@ export default function PresenterPage() {
                 <Trophy className="w-6 h-6 text-amber-400" />
                 <h3 className="text-xl font-black text-white">Leaderboard Standings</h3>
               </div>
-              <button
-                onClick={handleCloseLeaderboard}
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
-              >
-                Close [Esc]
-              </button>
+              <div className="flex items-center gap-2">
+                {session.entry_mode === 'individual' && rankedParticipants.length > 3 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllRanks(prev => !prev)}
+                    className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title="Toggle between Top 3 Podium and Full Cohort Standings [F]"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-slate-400" />
+                    <span>{showAllRanks ? 'Show Top 3 Only' : `Show All (${rankedParticipants.length})`}</span>
+                  </button>
+                )}
+                <button
+                  onClick={handleCloseLeaderboard}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
+                >
+                  Close [Esc]
+                </button>
+              </div>
             </div>
 
             <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
-              {rankedParticipants.length === 0 ? (
-                <p className="text-slate-500 italic text-center py-8">
-                  No responses recorded yet.
-                </p>
-              ) : (
-                rankedParticipants.map((p, index) => {
-                  let rankBadge = `${index + 1}`;
-                  let rankBg = 'bg-slate-800 text-slate-300';
-                  if (index === 0) {
-                    rankBadge = '🥇';
-                    rankBg = 'bg-amber-500/20 text-amber-300 border border-amber-500/40';
-                  } else if (index === 1) {
-                    rankBadge = '🥈';
-                    rankBg = 'bg-slate-400/20 text-slate-200 border border-slate-400/40';
-                  } else if (index === 2) {
-                    rankBadge = '🥉';
-                    rankBg = 'bg-amber-700/20 text-amber-600 border border-amber-700/40';
-                  }
+              {(() => {
+                const displayed = (session.entry_mode === 'individual' && !showAllRanks)
+                  ? rankedParticipants.slice(0, 3)
+                  : rankedParticipants;
 
+                if (displayed.length === 0) {
                   return (
-                    <div
-                      key={p.id}
-                      className="p-3.5 rounded-xl bg-[#0a0f1d] border border-[#1e2e4a] flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${rankBg}`}>
-                          {rankBadge}
-                        </span>
-                        <span className="font-bold text-slate-100 text-sm sm:text-base">
-                          {p.display_name}
-                        </span>
-                      </div>
-                      <span className="font-mono font-black text-lg text-[#6DC082]">
-                        {p.score} pts
-                      </span>
-                    </div>
+                    <p className="text-slate-500 italic text-center py-8">
+                      No responses recorded yet.
+                    </p>
                   );
-                })
-              )}
+                }
+
+                return (
+                  <>
+                    {displayed.map((p, index) => {
+                      let rankBadge = `${index + 1}`;
+                      let rankBg = 'bg-slate-800 text-slate-300';
+                      if (index === 0) {
+                        rankBadge = '🥇';
+                        rankBg = 'bg-amber-500/20 text-amber-300 border border-amber-500/40';
+                      } else if (index === 1) {
+                        rankBadge = '🥈';
+                        rankBg = 'bg-slate-400/20 text-slate-200 border border-slate-400/40';
+                      } else if (index === 2) {
+                        rankBadge = '🥉';
+                        rankBg = 'bg-amber-700/20 text-amber-600 border border-amber-700/40';
+                      }
+
+                      return (
+                        <div
+                          key={p.id}
+                          className="p-3.5 rounded-xl bg-[#0a0f1d] border border-[#1e2e4a] flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${rankBg}`}>
+                              {rankBadge}
+                            </span>
+                            <span className="font-bold text-slate-100 text-sm sm:text-base">
+                              {p.display_name}
+                            </span>
+                          </div>
+                          <span className="font-mono font-black text-lg text-[#6DC082]">
+                            {p.score} pts
+                          </span>
+                        </div>
+                      );
+                    })}
+
+                    {session.entry_mode === 'individual' && !showAllRanks && rankedParticipants.length > 3 && (
+                      <p className="text-[11px] text-slate-500 text-center italic pt-2">
+                        Displaying Top 3 Podium. Press [F] or click &quot;Show All&quot; to inspect full cohort.
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>

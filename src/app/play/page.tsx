@@ -52,6 +52,9 @@ function ParticipantPlayContent() {
   // Mobile Question Review (allows reviewing past questions & rationales)
   const [reviewingQIndex, setReviewingQIndex] = useState<number | null>(null);
 
+  // Self-Paced Navigation state
+  const [selfPacedQIndex, setSelfPacedQIndex] = useState<number>(0);
+
   // Timer
   const [timeLeft, setTimeLeft] = useState<number>(60);
 
@@ -304,7 +307,8 @@ function ParticipantPlayContent() {
     };
   }, [session?.status, session?.question_timer_end, session?.overall_timer_end, session?.timing_mode]);
 
-  const activeQIndex = session?.current_question_index ?? 0;
+  const isSelfPaced = session?.cohort_pacing === 'self_paced' && session?.status === 'question_active';
+  const activeQIndex = isSelfPaced ? selfPacedQIndex : (session?.current_question_index ?? 0);
   const currentQ = session?.questions?.[activeQIndex];
 
   // Reset selections when question changes
@@ -657,7 +661,54 @@ function ParticipantPlayContent() {
                 <BookOpen className="w-4 h-4 text-[#4682B4] shrink-0" />
                 <span>📖 Look inside your Learner Guide for this answer!</span>
               </div>
+              {justSubmittedFeedback && (
+                <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 animate-in fade-in shrink-0">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Auto-saved
+                </span>
+              )}
             </div>
+
+            {/* Self-Paced Question Jump Palette */}
+            {isSelfPaced && session.questions && session.questions.length > 1 && (
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 shrink-0">
+                <div className="flex items-center justify-between text-[11px] text-slate-500 font-semibold">
+                  <span>Question Jump Palette:</span>
+                  <span className="text-[#4682B4] font-bold">
+                    {session.questions.filter(q => participant && AppStore.getResponses(session.id, q.id).some(r => r.participant_id === participant.id)).length} / {session.questions.length} Answered
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                  {session.questions.map((q, idx) => {
+                    const isAnswered = participant && AppStore.getResponses(session.id, q.id).some(r => r.participant_id === participant.id);
+                    const isViewing = idx === activeQIndex;
+                    return (
+                      <button
+                        key={q.id || idx}
+                        type="button"
+                        onClick={() => setSelfPacedQIndex(idx)}
+                        className={`w-8 h-8 rounded-lg text-xs font-bold transition-all shrink-0 flex items-center justify-center border cursor-pointer ${
+                          isViewing
+                            ? 'bg-[#4682B4] text-white border-[#4682B4] shadow-xs ring-2 ring-[#4682B4]/30'
+                            : isAnswered
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-black'
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {idx + 1}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Guide Section Pin */}
+            {currentQ.guide_topic_hint && (
+              <div className="px-3 py-1.5 rounded-lg bg-sky-50 border border-sky-200 text-xs text-[#1e3a5f] font-semibold flex items-center gap-1.5 shrink-0">
+                <BookOpen className="w-3.5 h-3.5 text-[#00B0F0] shrink-0" />
+                <span>Reference: <strong>{currentQ.guide_topic_hint}</strong></span>
+              </div>
+            )}
 
             {/* Group Deliberation Cue */}
             {session.entry_mode === 'group' && (
@@ -832,8 +883,8 @@ function ParticipantPlayContent() {
                 </div>
               )}
 
-              {/* Active Waiting Nudge */}
-              {selectedChoices.length > 0 && !justSubmittedFeedback && (
+              {/* Active Waiting Nudge (Facilitator-Paced Only) */}
+              {!isSelfPaced && selectedChoices.length > 0 && !justSubmittedFeedback && (
                 <div className="p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-center">
                   <p className="text-[11px] text-slate-600 font-medium">
                     ✅ Choice logged! While waiting: Check your Learner Guide index for the exact heading.
@@ -842,10 +893,44 @@ function ParticipantPlayContent() {
               )}
             </div>
 
+            {/* Self-Paced Navigation Controls */}
+            {isSelfPaced && session.questions && session.questions.length > 1 && (
+              <div className="pt-2 flex items-center justify-between gap-2 border-t border-slate-200 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSelfPacedQIndex((prev) => Math.max(0, prev - 1))}
+                  disabled={activeQIndex === 0}
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors flex items-center gap-1 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Previous</span>
+                </button>
+
+                <span className="text-xs font-bold text-slate-500">
+                  Question {activeQIndex + 1} of {session.questions.length}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setSelfPacedQIndex((prev) => Math.min((session.questions?.length || 1) - 1, prev + 1))}
+                  disabled={activeQIndex >= (session.questions.length - 1)}
+                  className="px-3.5 py-2 rounded-xl bg-[#4682B4] hover:bg-[#3b6f9a] text-white text-xs font-bold transition-colors flex items-center gap-1 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shadow-xs"
+                >
+                  <span>Next</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             {/* Bottom Status Indicator */}
             <div className="pt-2 text-center text-xs text-slate-500">
               {session.status === 'question_locked' ? (
                 <span className="text-amber-600 font-bold">Submissions Locked by Facilitator</span>
+              ) : isSelfPaced ? (
+                <span className="text-emerald-700 font-semibold flex items-center justify-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Self-Paced Mode • Answers auto-save as you move between questions</span>
+                </span>
               ) : (
                 <span>Submissions open • Timer synced with classroom projector</span>
               )}
@@ -1147,9 +1232,9 @@ function ParticipantPlayContent() {
                 return null;
               })()}
 
-              {/* Leaderboard Table */}
+              {/* Leaderboard Table (Top 3 Podium for Individual, Full for Group Teams) */}
               <div className="flex-1 overflow-y-auto my-2 space-y-1.5 pr-1 max-h-64">
-                {cohortParticipants.map((p, idx) => {
+                {(session.entry_mode === 'individual' ? cohortParticipants.slice(0, 3) : cohortParticipants).map((p, idx) => {
                   const isCurrent = p.id === participant?.id;
                   const rank = idx + 1;
 
@@ -1193,6 +1278,12 @@ function ParticipantPlayContent() {
                     </div>
                   );
                 })}
+
+                {session.entry_mode === 'individual' && cohortParticipants.length > 3 && (
+                  <p className="text-[10px] text-slate-400 text-center italic pt-1">
+                    Displaying Top 3 Podium
+                  </p>
+                )}
               </div>
 
               {/* Facilitator Synchronized Note */}

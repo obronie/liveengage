@@ -2,6 +2,8 @@ export type QuestionFormat = 'MCQ' | 'MULTIPLE' | 'BINARY' | 'SCALE' | 'WORD_CLO
 
 export type SessionEntryMode = 'individual' | 'group';
 
+export type CohortPacingMode = 'facilitator_paced' | 'self_paced';
+
 export type SessionStatus = 'lobby' | 'question_active' | 'question_locked' | 'revealed' | 'completed';
 
 export type DocumentType = 'curriculum' | 'eisa_specification' | 'learner_guide' | 'workbook' | 'model_answers';
@@ -68,6 +70,7 @@ export interface QuestionSet {
   timing_mode?: 'per_question' | 'overall' | 'untimed';
   overall_time_minutes?: number; // e.g. 20 for 20 minutes
   per_question_duration?: number; // e.g. 45 for 45s
+  cohort_pacing?: CohortPacingMode;
   questions: Question[];
   created_at: string;
   updated_at: string;
@@ -109,6 +112,7 @@ export interface Session {
   cohort_number: number; // 1 to 10
   entry_mode: SessionEntryMode;
   status: SessionStatus;
+  cohort_pacing?: CohortPacingMode;
   pacing_mode?: 'waiting_screen' | 'start_now';
   current_question_index: number;
   facilitator_instructions?: string;

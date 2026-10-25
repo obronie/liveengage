@@ -1124,6 +1124,7 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
       cohort_number: 1,
       entry_mode: selectedSet.default_entry_mode || 'group',
       timing_mode: effectiveTimingMode,
+      cohort_pacing: effectiveTimingMode === 'overall' ? 'self_paced' : 'facilitator_paced',
       overall_time_minutes: effectiveOverallTime,
       per_question_duration: selectedSet.per_question_duration || 45,
       status: 'lobby',
@@ -1134,7 +1135,11 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
     };
 
     await AppStore.saveSession(newSession);
-    router.push(`/presenter/${roomCode}`);
+    if (typeof window !== 'undefined') {
+      window.open(`/presenter/${roomCode}`, '_blank');
+    } else {
+      router.push(`/presenter/${roomCode}`);
+    }
   };
 
   // Document status
@@ -1781,9 +1786,15 @@ Step 3: Total units received = 440 + 48 = 488 units (shortage of 12 units).`
                       {/* 🎯 Q&A Wheel Presenter */}
                       <button
                         type="button"
-                        onClick={() => setShowQAWheelModal(true)}
+                        onClick={() => {
+                          if (typeof window !== 'undefined') {
+                            window.open(`/wheel/${selectedSet.id}`, '_blank');
+                          } else {
+                            setShowQAWheelModal(true);
+                          }
+                        }}
                         className="px-3.5 py-1 bg-[#00B0F0] hover:bg-[#0090C0] text-white text-xs font-bold rounded-lg border border-[#0090C0]/50 transition-all flex items-center gap-1.5 shrink-0 shadow-xs hover:shadow-md cursor-pointer"
-                        title="Open Interactive Classroom Q&A & Name Wheel Presenter"
+                        title="Open Interactive Classroom Q&A & Name Wheel Presenter in New Tab"
                       >
                         <RotateCw className="w-3.5 h-3.5" />
                         <span>🎯 Q&A Wheel</span>
