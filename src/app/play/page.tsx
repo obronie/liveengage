@@ -82,6 +82,7 @@ function ParticipantPlayContent() {
         const foundSession = await AppStore.getSessionByRoomCode(session.room_code);
         if (foundSession) {
           setSession((prev) => ({ ...(prev || {}), ...foundSession }));
+          AppStore.fetchResponses(foundSession.id);
           // If we already have a participant, update stage based on session status
           const savedParticipant = typeof window !== 'undefined'
             ? localStorage.getItem(`liveengage_participant_${session.room_code}`)
@@ -119,6 +120,7 @@ function ParticipantPlayContent() {
     }
 
     setSession(foundSession);
+    AppStore.fetchResponses(foundSession.id);
 
     // Check if participant is already established for this room PIN
     let existingParticipant: Participant | null = null;
@@ -176,6 +178,7 @@ function ParticipantPlayContent() {
       deviceIdentifier
     );
     setParticipant(p);
+    AppStore.fetchResponses(session.id);
 
     if (typeof window !== 'undefined') {
       localStorage.setItem(`liveengage_participant_${session.room_code}`, JSON.stringify(p));
@@ -307,7 +310,7 @@ function ParticipantPlayContent() {
     };
   }, [session?.status, session?.question_timer_end, session?.overall_timer_end, session?.timing_mode]);
 
-  const isSelfPaced = session?.cohort_pacing === 'self_paced' && session?.status === 'question_active';
+  const isSelfPaced = (session?.cohort_pacing === 'self_paced' || session?.timing_mode === 'overall') && (session?.status === 'question_active' || session?.status === 'question_locked');
   const activeQIndex = isSelfPaced ? selfPacedQIndex : (session?.current_question_index ?? 0);
   const currentQ = session?.questions?.[activeQIndex];
 
@@ -736,9 +739,9 @@ function ParticipantPlayContent() {
               )}
             </div>
 
-            {/* Self-Paced Question Jump Palette */}
+            {/* Self-Paced Question Jump Palette & Quick Navigation */}
             {isSelfPaced && session.questions && session.questions.length > 1 && (
-              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 shrink-0">
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 shrink-0 shadow-xs">
                 <div className="flex items-center justify-between text-[11px] text-slate-500 font-semibold">
                   <span>Question Jump Palette:</span>
                   <span className="text-[#4682B4] font-bold">
@@ -766,6 +769,33 @@ function ParticipantPlayContent() {
                       </button>
                     );
                   })}
+                </div>
+
+                {/* Top Quick Navigation Bar */}
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-200/80">
+                  <button
+                    type="button"
+                    onClick={() => setSelfPacedQIndex((prev) => Math.max(0, prev - 1))}
+                    disabled={activeQIndex === 0}
+                    className="flex-1 py-1.5 px-3 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shadow-2xs"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Previous (Q{Math.max(1, activeQIndex)})</span>
+                  </button>
+
+                  <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap px-1">
+                    Q{activeQIndex + 1} / {session.questions.length}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelfPacedQIndex((prev) => Math.min((session.questions?.length || 1) - 1, prev + 1))}
+                    disabled={activeQIndex >= (session.questions.length - 1)}
+                    className="flex-1 py-1.5 px-3 rounded-lg bg-[#4682B4] hover:bg-[#3b6f9a] text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shadow-2xs"
+                  >
+                    <span>Next (Q{Math.min(session.questions.length, activeQIndex + 2)})</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             )}

@@ -166,8 +166,27 @@ export default function PresenterPage() {
       }
     });
 
+    // Active polling fallback to guarantee 100% accurate live cohort progress and responses across network devices
+    const pollInterval = setInterval(async () => {
+      const activeSess = AppStore.getSessions().find(s => s.room_code === roomCode);
+      const targetId = activeSess?.id || session?.id;
+      if (targetId) {
+        const [rList, pList] = await Promise.all([
+          AppStore.fetchResponses(targetId),
+          AppStore.fetchParticipants(targetId)
+        ]);
+        if (rList) {
+          setResponses(rList);
+        }
+        if (pList && pList.length > 0) {
+          setParticipants(pList);
+        }
+      }
+    }, 2500);
+
     return () => {
       unsubscribe();
+      clearInterval(pollInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (timerRef.current) clearInterval(timerRef.current);
     };
@@ -309,7 +328,7 @@ export default function PresenterPage() {
     setTimeLeft(duration);
     setInitialDuration(duration);
     setIsTimerRunning(!isUntimed && duration > 0);
-    setResponses([]);
+    AppStore.fetchResponses(updated.id).then(rList => setResponses(rList || []));
     setShowRationale(true);
     await AppStore.saveSession(updated);
   };

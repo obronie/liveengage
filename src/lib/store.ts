@@ -2554,6 +2554,7 @@ export class AppStore {
     overall_timer_end?: string | null;
     per_question_duration: number;
     show_leaderboard: boolean;
+    cohort_pacing: 'facilitator_paced' | 'self_paced';
     clean_instructions: string;
   } {
     let clean = remoteSession?.facilitator_instructions || '';
@@ -2567,12 +2568,16 @@ export class AppStore {
         } catch {}
       }
     }
+    const timing_mode = remoteSession?.timing_mode || meta.timing_mode || 'per_question';
+    const cohort_pacing = remoteSession?.cohort_pacing || meta.cohort_pacing || (timing_mode === 'overall' ? 'self_paced' : 'facilitator_paced');
+
     return {
-      timing_mode: remoteSession?.timing_mode || meta.timing_mode || 'per_question',
+      timing_mode,
       overall_time_minutes: remoteSession?.overall_time_minutes ?? meta.overall_time_minutes ?? 20,
       overall_timer_end: remoteSession?.overall_timer_end || meta.overall_timer_end || null,
       per_question_duration: remoteSession?.per_question_duration ?? meta.per_question_duration ?? 45,
       show_leaderboard: remoteSession?.show_leaderboard !== undefined ? remoteSession.show_leaderboard : (meta.show_leaderboard || false),
+      cohort_pacing,
       clean_instructions: clean,
     };
   }
@@ -2610,6 +2615,7 @@ export class AppStore {
             overall_timer_end: decoded.overall_timer_end || local?.overall_timer_end,
             per_question_duration: decoded.per_question_duration ?? local?.per_question_duration ?? 45,
             show_leaderboard: decoded.show_leaderboard !== undefined ? decoded.show_leaderboard : (local?.show_leaderboard || false),
+            cohort_pacing: decoded.cohort_pacing || local?.cohort_pacing || (decoded.timing_mode === 'overall' ? 'self_paced' : 'facilitator_paced'),
             facilitator_instructions: decoded.clean_instructions,
           };
           if (typeof window !== 'undefined') {
@@ -2649,6 +2655,7 @@ export class AppStore {
               overall_timer_end: decoded.overall_timer_end || loc?.overall_timer_end,
               per_question_duration: decoded.per_question_duration ?? loc?.per_question_duration ?? 45,
               show_leaderboard: decoded.show_leaderboard !== undefined ? decoded.show_leaderboard : (loc?.show_leaderboard || false),
+              cohort_pacing: decoded.cohort_pacing || loc?.cohort_pacing || (decoded.timing_mode === 'overall' ? 'self_paced' : 'facilitator_paced'),
               facilitator_instructions: decoded.clean_instructions,
             } as Session;
           });
@@ -2684,12 +2691,14 @@ export class AppStore {
     const supabase = getSupabaseClient();
     if (supabase) {
       try {
+        const effectiveCohortPacing = session.cohort_pacing || (session.timing_mode === 'overall' ? 'self_paced' : 'facilitator_paced');
         const timingMeta = {
           timing_mode: session.timing_mode || 'per_question',
           overall_time_minutes: session.overall_time_minutes || 20,
           overall_timer_end: session.overall_timer_end,
           per_question_duration: session.per_question_duration || 45,
           show_leaderboard: session.show_leaderboard || false,
+          cohort_pacing: effectiveCohortPacing,
         };
         const rawInstructions = session.facilitator_instructions ? session.facilitator_instructions.replace(/^TIMING::\{.*?\}::/, '') : '';
         const encodedInstructions = `TIMING::${JSON.stringify(timingMeta)}::${rawInstructions}`;
